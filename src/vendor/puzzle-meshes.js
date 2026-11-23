@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { UNDEFINED_COLOR } from "./viewer-colors.js";
 import { selected } from "./puzzle.js";
 import { bodyGeometry } from "./body-geometry.js";
 import { parallelBands } from "./parallel-turns.js";
@@ -134,9 +135,7 @@ export class PuzzleMeshes {
           if (!this.dimMaterials[color - 8])
             this.dimMaterials[color - 8] = material.clone();
           material = this.dimMaterials[color - 8];
-          material.color
-            .copy(this.materials[color - 8].color)
-            .multiplyScalar(0);
+          material.color.set(UNDEFINED_COLOR);
         }
         write(pos, material, this.groups[section]);
       }),
@@ -152,8 +151,8 @@ export class PuzzleMeshes {
     });
   }
   refreshDimColors() {
-    this.dimMaterials.forEach((material, i) =>
-      material.color.copy(this.materials[i].color).multiplyScalar(0),
+    this.dimMaterials.forEach((material) =>
+      material.color.set(UNDEFINED_COLOR),
     );
   }
   dispose() {

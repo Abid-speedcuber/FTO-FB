@@ -17,7 +17,8 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
   const [step, setStep] = useState(0),
     [isPlaying, setPlaying] = useState(false),
     [speed, setSpeed] = useState(500),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [backStickers, setBackStickers] = useState(true);
   const mask = useRef(),
     homeView = useRef();
   const halt = () => {
@@ -98,6 +99,17 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
   return (
     <div className="viewer-panel">
       <div className="stage-head">
+        <label className="back-stickers">
+          <input
+            type="checkbox"
+            checked={backStickers}
+            onChange={(e) => {
+              setBackStickers(e.target.checked);
+              viewer.current?.setBackStickers(e.target.checked);
+            }}
+          />
+          Back stickers
+        </label>
         <div className="view-actions">
           <button
             className="quiet"

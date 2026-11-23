@@ -1,12 +1,14 @@
 import * as THREE from "three";
+import { OUTLINE_COLOR } from "./viewer-colors.js";
 import { FACES, solvedState } from "./puzzle.js";
 import { ViewControls } from "./view-controls.js";
 import { PuzzleMeshes } from "./puzzle-meshes.js";
+import { InspectionProjection } from "./inspection-projection.js";
 import { HOME_POSITION, defaultCifRotation } from "./orientation.js";
 
 // A self-contained viewer for checkpoint editing and recorded solves.
 export class PuzzleViewer {
-  constructor(host, { onSelect = null } = {}) {
+  constructor(host, { onSelect = null, showBackStickers = true } = {}) {
     this.host = host;
     this.onSelect = onSelect;
     this.size = 3;
@@ -15,8 +17,16 @@ export class PuzzleViewer {
     this.meshes = [];
     this.scene = new THREE.Scene();
     this.bodies = [];
+    this.showBackStickers = showBackStickers;
+    this.animating = false;
+    this.projection = new InspectionProjection(this.scene);
+    this.projectionColors = Object.fromEntries(
+      FACES.map((f) => [f.name, f.color]),
+    );
     this.camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-    this.camera.position.copy(HOME_POSITION).multiplyScalar(0.78);
+    this.camera.position
+      .copy(HOME_POSITION)
+      .multiplyScalar(showBackStickers ? 0.92 : 0.78);
     this.camera.lookAt(0, 0, 0);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -38,7 +48,7 @@ export class PuzzleViewer {
         }),
     );
     this.bodyMaterial = new THREE.MeshBasicMaterial({
-      color: "#080e11",
+      color: OUTLINE_COLOR,
       side: THREE.DoubleSide,
     });
     this.geometry = new PuzzleMeshes(
@@ -126,7 +136,16 @@ export class PuzzleViewer {
     }
     this.draw();
   }
+  setBackStickers(visible) {
+    this.showBackStickers = visible;
+    this.draw();
+  }
   render(motions = []) {
+    // Inspection sheets represent settled faces, so omit them during a turn.
+    this.animating = motions.length > 0;
+    this.projectionColors = Object.fromEntries(
+      FACES.map((f, i) => [f.name, this.colors?.[i] ?? f.color]),
+    );
     this.materials.forEach((material, i) =>
       material.color.set(this.colors?.[i] ?? FACES[i].color),
     );
@@ -152,12 +171,23 @@ export class PuzzleViewer {
     this.draw();
   }
   draw() {
-    if (!this.batching) this.renderer.render(this.scene, this.camera);
+    if (!this.batching) {
+      this.projection.setVisible(this.showBackStickers && !this.animating);
+      this.projection.render({
+        size: this.size,
+        state: this.state,
+        colors: this.projectionColors,
+        camera: this.camera,
+        selection: this.selection,
+      });
+      this.renderer.render(this.scene, this.camera);
+    }
   }
   dispose() {
     this.controls.cancelAll();
     this.observer.disconnect();
     this.geometry.dispose();
+    this.projection.dispose();
     for (const material of this.materials) material.dispose();
     this.bodyMaterial.dispose();
     this.renderer.dispose();

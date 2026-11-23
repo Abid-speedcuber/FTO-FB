@@ -201,7 +201,9 @@ select {
 }
 .stage-head {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   padding: 8px 14px;
 }
 .view-actions {
@@ -345,4 +347,18 @@ select {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+.back-stickers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #acb7c4;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.back-stickers input {
+  margin: 0;
+  accent-color: #acd982;
 }

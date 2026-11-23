@@ -24,7 +24,7 @@ The first block uses the exact `builtinPatterns()` definition from the neighbori
 
 **First center** solves three edges and the block color’s three centers (6 pieces / 9 stickers), in any of the 12 orbit poses. Corners and other-orbit centers are unconstrained.
 
-A finished block has 12 physical pieces (21 stickers): two corners, three edges, and seven centers. The union of all three candidate blocks contains 15 physical pieces. The viewer additionally defines all interchangeable centers of the block's four colors, displaying **18 physical pieces (30 stickers): three corners, three edges, the block color’s three centers, and nine centers from the other orbit**. Every other piece is black. This fixed mask follows piece identity through turns and stays the same across solution cards, so a required same-color center is never hidden. The initial and reset camera use the simulator’s CIF hold.
+A finished block has 12 physical pieces (21 stickers): two corners, three edges, and seven centers. The union of all three candidate blocks contains 15 physical pieces. The viewer additionally defines all interchangeable centers of the block's four colors, displaying **18 physical pieces (30 stickers): three corners, three edges, the block color’s three centers, and nine centers from the other orbit**. Every other piece is dark gray, with pitch-black outlines. This fixed mask follows piece identity through turns and stays the same across solution cards, so a required same-color center is never hidden. The initial and reset camera use the simulator’s CIF hold.
 
 Both directions of the 120° turns on U, R, F, L, B, D, BR, and BL cost one move. Scramble input, printed solutions, playback all use conventional **CIF/csTimer notation**, mapped explicitly to the simulator’s internal geometric faces. Scramble notation accepts whitespace-separated face turns, case-insensitively, with a prime (straight or curly) or `2` for the inverse direction. Rotations, wide turns, comments, and nested algorithm notation are not accepted. An empty scramble is the solved puzzle.
 
@@ -45,6 +45,8 @@ The lower bound is the minimum over block choices of the maximum of the correspo
 
 These exact tables provide safe pruning without the false positives of a Bloom filter. They exhaust the abstract spaces instead of imposing a depth-eight cutoff. First preparation generally takes a few seconds; graphs and tables remain cached in the worker for subsequent searches. They are rebuilt after a page reload or cancellation. No tables are downloaded or persisted. Long searches and very large result sets can still be expensive, especially on mobile; results stream in batches and render 60 cards per page.
 
+The **Back stickers** toggle borrows the offset rear-face sheets from FTO-simulator inspection mode, preserving the dark-gray undefined pieces and pitch-black outlines. Sheets follow camera orbit, refresh at every completed move, and are hidden during an in-progress turn, matching inspection’s settled-face behavior.
+
 The virtual FTO supports drag-to-orbit, zoom, automatic card playback, pause, step forward/back, speed selection, reset view, and facing the completed block.
 
 ## Validation
@@ -53,6 +55,6 @@ The Node tests compare all 72 sticker destinations for all 16 turns against a fr
 
 ## Source and license
 
-This project is GPL-3.0-only. The integer-lattice geometry, phase patterns, and Three.js viewer modules in `src/model/` and `src/vendor/` are adapted from the neighboring **FTO-simulator** project. The solver architecture also draws on the pruning and iterative-deepening approach in **FTO-alg-finder**. The black masking and buffer allocation correction are local viewer modifications. See [LICENSE](LICENSE).
+This project is GPL-3.0-only. The integer-lattice geometry, phase patterns, and Three.js viewer modules in `src/model/` and `src/vendor/` are adapted from the neighboring **FTO-simulator** project. The solver architecture also draws on the pruning and iterative-deepening approach in **FTO-alg-finder**. The undefined-piece masking, rear-face sheets, and buffer allocation correction are local viewer modifications. See [LICENSE](LICENSE).
 
 Frontend changes stay local until the owner has hand-tested and explicitly requests deployment, as required by the parent workspace's `AGENTS.md`.

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
+import { UNDEFINED_COLOR } from "../src/vendor/viewer-colors.js";
 import { PuzzleMeshes } from "../src/vendor/puzzle-meshes.js";
 import { solvedState } from "../src/model/puzzle.js";
 test("pooled vertex buffers stay finite and have whole vertices", () => {
@@ -20,7 +21,10 @@ test("pooled vertex buffers stay finite and have whole vertices", () => {
     assert.ok(Number.isFinite(mesh.geometry.boundingSphere.radius));
   }
   for (const material of geometry.dimMaterials.filter(Boolean))
-    assert.equal(material.color.getHex(), 0);
+    assert.equal(
+      material.color.getHex(),
+      new THREE.Color(UNDEFINED_COLOR).getHex(),
+    );
   geometry.dispose();
   materials.forEach((m) => m.dispose());
 });
