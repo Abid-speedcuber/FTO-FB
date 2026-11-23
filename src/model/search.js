@@ -114,7 +114,10 @@ export function prepare(color, progress = () => {}, mode = "fb") {
   );
   const required = bases.map((v) => new Set(v.first.map(([id]) => id)));
   const edgeIds = groups
-    .filter((p) => p.length === 2 && p.some((s) => required[0].has(s)))
+    .filter(
+      (p) =>
+        p.length === 2 && p.some((s) => required.some((set) => set.has(s))),
+    )
     .map((p) => p.find((s) => edgeOrbit.includes(s)));
   const cornerIds = required.map((set) =>
     groups
@@ -129,7 +132,14 @@ export function prepare(color, progress = () => {}, mode = "fb") {
   progress("Building exact projection graphs");
   const edge = graph(`e${edgeIds}`, edgeOrbit, edgeIds),
     face = graph(`f${color}`, faceOrbit, faceIds, "set");
-  const center = graph(`center${otherOrbit[0]}`, otherOrbit, null, "colors");
+  const hasOtherCenters = bases.some((base) =>
+    base.first.some(([s]) => centers.has(s) && otherOrbit.includes(s)),
+  );
+  const center = hasOtherCenters
+    ? graph(`center${otherOrbit[0]}`, otherOrbit, null, "colors")
+    : graph(`empty${otherOrbit[0]}`, otherOrbit, []);
+  const edgePositions = edge.codes.map((code) => edge.decode(code));
+  const facePositions = face.codes.map((code) => new Set(face.decode(code)));
   const corners = cornerIds.map((ids) => graph(`c${ids}`, cornerOrbit, ids));
   const coordinate = (a, ids, r) => {
     const ps = ids.map((id) => a.local.get(g.permutations[r][id]));
@@ -141,10 +151,32 @@ export function prepare(color, progress = () => {}, mode = "fb") {
     const targets = all
       .filter((v) => v.up === base.up)
       .flatMap((v) => {
-        const e = coordinate(edge, edgeIds, v.rotation),
-          f = coordinate(face, faceIds, v.rotation),
-          c = coordinate(corners[i], cornerIds[i], v.rotation);
-        if (e === undefined || f === undefined || c === undefined) return [];
+        const c = coordinate(corners[i], cornerIds[i], v.rotation);
+        const requiredEdges = edgeIds.flatMap((id, k) =>
+          required[i].has(id)
+            ? [[k, edge.local.get(g.permutations[v.rotation][id])]]
+            : [],
+        );
+        const requiredFace = v.first
+          .filter(([s, colorAtSlot]) => centers.has(s) && colorAtSlot === color)
+          .map(([s]) => face.local.get(s));
+        if (
+          c === undefined ||
+          requiredEdges.some(([, p]) => p === undefined) ||
+          requiredFace.some((p) => p === undefined)
+        )
+          return [];
+        const es = new Set(
+          edgePositions.flatMap((positions, s) =>
+            requiredEdges.every(([k, p]) => positions[k] === p) ? [s] : [],
+          ),
+        );
+        const fs = new Set(
+          facePositions.flatMap((positions, s) =>
+            requiredFace.every((p) => positions.has(p)) ? [s] : [],
+          ),
+        );
+        if (!es.size || !fs.size) return [];
         const constraints = v.first
           .filter(([s]) => centers.has(s) && otherOrbit.includes(s))
           .map(([s, c]) => [center.local.get(s), center.palette.indexOf(c)]);
@@ -158,7 +190,7 @@ export function prepare(color, progress = () => {}, mode = "fb") {
           )
         )
           return [];
-        return [{ e, f, c, constraints, variant: v }];
+        return [{ es, fs, c, constraints, variant: v }];
       });
     progress(`Building block ${i + 1} of ${bases.length} pruning tables`);
     const centerSeeds = [];
@@ -178,14 +210,18 @@ export function prepare(color, progress = () => {}, mode = "fb") {
       dec: distances(
         edge,
         corners[i],
-        targets.map((t) => t.e * corners[i].size + t.c),
+        targets.flatMap((t) => [...t.es].map((e) => e * corners[i].size + t.c)),
       ),
     };
   });
   const def = distances(
     edge,
     face,
-    options.flatMap((o) => o.targets.map((t) => t.e * face.size + t.f)),
+    options.flatMap((o) =>
+      o.targets.flatMap((t) =>
+        [...t.es].flatMap((e) => [...t.fs].map((f) => e * face.size + f)),
+      ),
+    ),
   );
   return {
     edge,
@@ -204,14 +240,15 @@ export function initialCoordinates(t, scramble) {
   const positional = (a, ids) =>
     a.index.get(a.encode(ids.map((id) => a.local.get(ps[id]))));
   const colors = new Array(12);
-  for (const id of t.center.orbit)
-    colors[t.center.local.get(ps[id])] = t.center.palette.indexOf(
-      solved[id].color,
-    );
+  if (t.center.palette)
+    for (const id of t.center.orbit)
+      colors[t.center.local.get(ps[id])] = t.center.palette.indexOf(
+        solved[id].color,
+      );
   return [
     positional(t.edge, t.edgeIds),
     positional(t.face, t.faceIds),
-    t.center.index.get(t.center.encode(colors)),
+    t.center.palette ? t.center.index.get(t.center.encode(colors)) : 0,
     ...t.corners.map((c, i) => positional(c, t.cornerIds[i])),
   ];
 }
@@ -240,8 +277,8 @@ export function solve(
     for (let i = 0; i < t.options.length; i++)
       for (const target of t.options[i].targets)
         if (
-          target.e === s[0] &&
-          target.f === s[1] &&
+          target.es.has(s[0]) &&
+          target.fs.has(s[1]) &&
           target.c === s[3 + i] &&
           target.constraints.every(
             ([p, c]) => ((t.center.codes[s[2]] >>> (p * 2)) & 3) === c,

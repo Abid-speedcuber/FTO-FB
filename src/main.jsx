@@ -136,6 +136,8 @@ function App() {
             >
               <option value="fb">FB</option>
               <option value="fc+1">FC+1</option>
+              <option value="arrow">Arrow</option>
+              <option value="fc">First center</option>
             </select>
           </label>
           {busy ? (

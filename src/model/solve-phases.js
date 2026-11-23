@@ -105,6 +105,16 @@ export function builtinPatterns() {
             .filter(([bits]) => bits & (1 << up))
             .flatMap(([, ids]) => ids),
         ];
+        // The included triplet sits at the vertex common to these two axes.
+        // Keep the two-layer tip of FC+1: corner, two edges, three centers.
+        const tipAxis = axes[center].normal.findIndex(
+          (v, axis) => v === axes[up].normal[axis],
+        );
+        const arrow = plusOne.filter((id) =>
+          g.solved[id].vertices.every(
+            (v) => v[tipAxis] * axes[center].normal[tipAxis] >= 1,
+          ),
+        );
         const first = [
           ...centers[center],
           ...triples
@@ -146,6 +156,8 @@ export function builtinPatterns() {
             rotation: r,
             first: makePattern(g, first, r),
             plusOne: makePattern(g, plusOne, r),
+            arrow: makePattern(g, arrow, r),
+            firstCenter: makePattern(g, centers[center], r),
             lower: makePattern(g, lower, r),
             nautilusLower: makePattern(g, nautilusLower, r),
             nautilusGoals: lastLayerGoals.map((goal) =>

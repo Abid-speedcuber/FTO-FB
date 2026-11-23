@@ -79,13 +79,29 @@ export function colorsAt(positions) {
   return colors;
 }
 export function goalsFor(color, mode = "fb") {
-  if (mode !== "fb" && mode !== "fc+1")
-    throw new Error(`Unknown mode: ${mode}`);
+  const fields = {
+    fb: "first",
+    "fc+1": "plusOne",
+    arrow: "arrow",
+    fc: "firstCenter",
+  };
+  if (!Object.hasOwn(fields, mode)) throw new Error(`Unknown mode: ${mode}`);
   const { families, variants } = builtinPatterns();
-  const goals = variants.filter(
+  let goals = variants.filter(
     (v) => families[v.family].axes[v.center].name === FACES[color].name,
   );
-  return mode === "fb" ? goals : goals.map((v) => ({ ...v, first: v.plusOne }));
+  if (mode === "fc") {
+    // The center has no triplet choice: retain one copy of each rigid pose.
+    const seen = new Set();
+    goals = goals.filter((v) => {
+      if (seen.has(v.rotation)) return false;
+      seen.add(v.rotation);
+      return true;
+    });
+  }
+  return mode === "fb"
+    ? goals
+    : goals.map((v) => ({ ...v, first: v[fields[mode]] }));
 }
 export function matchingGoal(positions, color, mode = "fb") {
   const colors = colorsAt(positions);

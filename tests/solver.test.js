@@ -277,3 +277,113 @@ test("FC+1 can stop at nine pieces without completing a full block", () => {
   assert.equal(result.count, 8);
   assert.equal(solve(get(0), sc).depth, 6);
 });
+
+test("Arrow is the six-piece top of FC+1 and first center is six edges/centers", () => {
+  for (let color = 0; color < 8; color++) {
+    for (const mode of ["arrow", "fc"]) {
+      const bases = goalsFor(color, mode).filter((v) =>
+        v.first.every(([id, c]) => solved[id].color === c),
+      );
+      assert.equal(bases.length, mode === "arrow" ? 3 : 1);
+      for (const base of bases) {
+        const ids = new Set(base.first.map(([id]) => id));
+        const pieces = physicalGroups().filter((g) =>
+          g.some((id) => ids.has(id)),
+        );
+        assert.equal(pieces.length, 6);
+        assert.ok(pieces.every((g) => g.every((id) => ids.has(id))));
+        assert.equal(pieces.filter((g) => g.length === 1).length, 3);
+        assert.equal(
+          pieces.filter((g) => g.length === 2).length,
+          mode === "arrow" ? 2 : 3,
+        );
+        assert.equal(
+          pieces.filter((g) => g.length === 4).length,
+          mode === "arrow" ? 1 : 0,
+        );
+        assert.equal(base.first.length, mode === "arrow" ? 11 : 9);
+        if (mode === "arrow") {
+          assert.equal(base.first.filter(([, c]) => c === color).length, 4);
+          const removed = physicalGroups().filter(
+            (g) =>
+              g.every((id) => base.plusOne.some(([s]) => s === id)) &&
+              !g.some((id) => ids.has(id)),
+          );
+          assert.deepEqual(removed.map((g) => g.length).sort(), [1, 1, 2]);
+          assert.ok(
+            base.first.every(([id, c]) =>
+              base.plusOne.some(([p, v]) => p === id && v === c),
+            ),
+          );
+        }
+      }
+    }
+  }
+});
+test("Arrow and first center solve every color and all reachable poses", () => {
+  const sc = parseScramble("R U F' L BR U' BL D R' B F U L' D BR' F");
+  for (let color = 0; color < 8; color++)
+    for (const mode of ["arrow", "fc"]) {
+      const t = get(color, mode);
+      assert.deepEqual(
+        t.options.map((o) => o.targets.length),
+        mode === "arrow" ? [12, 12, 12] : [12],
+      );
+      if (mode === "fc") assert.equal(t.center.size, 1);
+      assert.equal(solve(t, []).depth, 0);
+      const result = solve(t, sc, {
+        onSolution: (solution) => {
+          const ps = stickerPositions([...sc, ...solution.moves]);
+          assert.ok(matchingGoal(ps, color, mode));
+          const visible = candidateMask(color);
+          assert.ok(
+            solution.target.first.every(([slot]) =>
+              visible.has(ps.indexOf(slot)),
+            ),
+          );
+        },
+        maxNodes: 100000000,
+      });
+      assert.ok(result.count > 0);
+    }
+});
+test("both six-piece modes enumerate the same optimal solutions as exhaustive search", () => {
+  for (const mode of ["arrow", "fc"])
+    for (const [text, color] of [
+      ["R U F", 0],
+      ["BR U' BL", 1],
+      ["R F'", 2],
+    ]) {
+      const sc = parseScramble(text),
+        found = [];
+      const result = solve(get(color, mode), sc, {
+        onSolution: (s) => found.push(s.moves.join(",")),
+      });
+      assert.deepEqual(
+        found.sort(),
+        brute(sc, color, result.depth, mode).sort(),
+      );
+    }
+});
+test("Arrow leaves the cropped bottom free and first center leaves triplets free", () => {
+  const sc = parseScramble("R U F' L BR U'");
+  const arrow = solve(get(0, "arrow"), sc, {
+    onSolution: (s) =>
+      assert.equal(
+        matchingGoal(stickerPositions([...sc, ...s.moves]), 0, "fc+1"),
+        undefined,
+      ),
+  });
+  assert.equal(arrow.depth, 2);
+  assert.equal(arrow.count, 1);
+  let withoutArrow = 0;
+  const fc = solve(get(0, "fc"), sc, {
+    onSolution: (s) => {
+      if (!matchingGoal(stickerPositions([...sc, ...s.moves]), 0, "arrow"))
+        withoutArrow++;
+    },
+  });
+  assert.equal(fc.depth, 2);
+  assert.equal(fc.count, 2);
+  assert.ok(withoutArrow > 0);
+});

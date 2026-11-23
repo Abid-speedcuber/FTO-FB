@@ -1,6 +1,6 @@
 # FTO / First block
 
-A local React + Vite application for finding **all shortest FB and FC+1 solutions** for any of the eight colors. No backend, account, or hosted solver is needed.
+A local React + Vite application for finding **all shortest FB, FC+1, Arrow, and First center solutions** for any of the eight colors. No backend, account, or hosted solver is needed.
 
 ```sh
 npm install
@@ -20,6 +20,10 @@ The first block uses the exact `builtinPatterns()` definition from the neighbori
 
 **FC+1** solves the six-piece first center plus one triplet (one corner and two centers): **9 physical pieces / 15 stickers**. It searches all three triplet choices and all 12 poses. FB instead solves the first center plus two triplets (12 pieces). The mode selector switches between these goals; search tables are cached separately for each color and mode.
 
+**Arrow** solves the six-piece top of FC+1: one corner, its two adjacent edges, and three centers (11 stickers). The bottom edge and two bottom centers are unconstrained. It searches all three arrows around the selected color in all 12 poses.
+
+**First center** solves three edges and the block color’s three centers (6 pieces / 9 stickers), in any of the 12 orbit poses. Corners and other-orbit centers are unconstrained.
+
 A finished block has 12 physical pieces (21 stickers): two corners, three edges, and seven centers. The union of all three candidate blocks contains 15 physical pieces. The viewer additionally defines all interchangeable centers of the block's four colors, displaying **18 physical pieces (30 stickers): three corners, three edges, the block color’s three centers, and nine centers from the other orbit**. Every other piece is black. This fixed mask follows piece identity through turns and stays the same across solution cards, so a required same-color center is never hidden. The initial and reset camera use the simulator’s CIF hold.
 
 Both directions of the 120° turns on U, R, F, L, B, D, BR, and BL cost one move. Scramble input, printed solutions, playback all use conventional **CIF/csTimer notation**, mapped explicitly to the simulator’s internal geometric faces. Scramble notation accepts whitespace-separated face turns, case-insensitively, with a prime (straight or curly) or `2` for the inverse direction. Rotations, wide turns, comments, and nested algorithm notation are not accepted. An empty scramble is the solved puzzle.
@@ -32,9 +36,10 @@ The browser worker builds small exact projection graphs directly from the simula
 - Three interchangeable centers of the selected color: 220 states.
 - The other center orbit: 369,600 color configurations.
 - FB: two distinguished corners per omitted-triple choice, 120 states each.
-- FC+1: one distinguished corner per included-triplet choice, 12 states each.
+- FC+1 and Arrow: one distinguished corner per choice, 12 states each.
+- First center: no corner or other-center graph; these coordinates have one unconstrained state.
 
-Multi-source breadth-first search produces exact distance databases for edges + selected centers, edges + corners for each block choice, and the other center orbit for each block choice. Sources include all 12 reachable poses, with unconstrained centers filled in all legal ways.
+Multi-source breadth-first search produces exact distance databases for edges + selected centers, edges + corners for each block choice, and the other center orbit for each block choice. Sources include all 12 reachable poses, with unconstrained pieces filled in all legal ways. Arrow targets accept any position of the omitted edge and either of the two unused block-color centers; pruning and goal checks constrain only the six required pieces.
 
 The lower bound is the minimum over block choices of the maximum of the corresponding projection distances. Iterative deepening starts at this admissible bound and checks the complete correlated target at leaves. It only removes consecutive turns of the same face, which cannot occur in a shortest sequence. There is no transposition pruning, commuting-order suppression, depth cap, or solution-count cap: all shortest sequences are retained, including commuting orders. The final move and solution counts appear only when the entire first successful depth is exhausted. Stopping terminates the worker and explicitly leaves enumeration incomplete.
 
