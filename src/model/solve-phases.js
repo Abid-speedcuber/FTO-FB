@@ -99,6 +99,12 @@ export function builtinPatterns() {
         const triples = [...groups].filter(
           ([bits, ids]) => ids.length === 6 && bits & (1 << center),
         );
+        const plusOne = [
+          ...centers[center],
+          ...triples
+            .filter(([bits]) => bits & (1 << up))
+            .flatMap(([, ids]) => ids),
+        ];
         const first = [
           ...centers[center],
           ...triples
@@ -139,6 +145,7 @@ export function builtinPatterns() {
             up,
             rotation: r,
             first: makePattern(g, first, r),
+            plusOne: makePattern(g, plusOne, r),
             lower: makePattern(g, lower, r),
             nautilusLower: makePattern(g, nautilusLower, r),
             nautilusGoals: lastLayerGoals.map((goal) =>

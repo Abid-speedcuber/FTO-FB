@@ -78,15 +78,18 @@ export function colorsAt(positions) {
   positions.forEach((p, i) => (colors[p] = solved[i].color));
   return colors;
 }
-export function goalsFor(color) {
+export function goalsFor(color, mode = "fb") {
+  if (mode !== "fb" && mode !== "fc+1")
+    throw new Error(`Unknown mode: ${mode}`);
   const { families, variants } = builtinPatterns();
-  return variants.filter(
+  const goals = variants.filter(
     (v) => families[v.family].axes[v.center].name === FACES[color].name,
   );
+  return mode === "fb" ? goals : goals.map((v) => ({ ...v, first: v.plusOne }));
 }
-export function matchingGoal(positions, color) {
+export function matchingGoal(positions, color, mode = "fb") {
   const colors = colorsAt(positions);
-  return goalsFor(color).find((v) =>
+  return goalsFor(color, mode).find((v) =>
     v.first.every(([p, c]) => colors[p] === c),
   );
 }

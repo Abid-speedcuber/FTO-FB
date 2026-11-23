@@ -98,7 +98,6 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
   return (
     <div className="viewer-panel">
       <div className="stage-head">
-        <span className="eyebrow">VIRTUAL FTO</span>
         <div className="view-actions">
           <button
             className="quiet"
@@ -119,13 +118,12 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
             className="quiet"
             onClick={() => viewer.current?.setView(homeView.current)}
           >
-            Reset view
+            CIF
           </button>
         </div>
       </div>
       <div className="stage" ref={host} />
       {error && <p role="alert">{error}</p>}
-      <div className="orbit-hint">Drag to orbit · Scroll to zoom</div>
       <div className="timeline">
         {solution ? (
           solution.moves.length ? (
@@ -139,11 +137,9 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
               </button>
             ))
           ) : (
-            <span>Block already complete</span>
+            <span>Already complete</span>
           )
-        ) : (
-          <span>Select a solution to explore its moves</span>
-        )}
+        ) : null}
       </div>
       <div className="transport">
         <button
@@ -192,11 +188,6 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
           <option value="500">1×</option>
           <option value="250">2×</option>
         </select>
-      </div>
-      <div className="viewer-note">
-        <span className="black-square" />
-        Only the 18 candidate pieces are defined. Each solution forms a 12-piece
-        block.
       </div>
     </div>
   );

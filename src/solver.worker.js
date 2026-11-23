@@ -1,14 +1,17 @@
 import { prepare, solve } from "./model/search.js";
 const cache = new Map();
-self.onmessage = ({ data: { color, scramble } }) => {
+self.onmessage = ({ data: { color, scramble, mode = "fb" } }) => {
   try {
     const start = performance.now();
-    let tables = cache.get(color);
+    const key = `${color}:${mode}`;
+    let tables = cache.get(key);
     if (!tables) {
-      tables = prepare(color, (message) =>
-        self.postMessage({ type: "preparing", message }),
+      tables = prepare(
+        color,
+        (message) => self.postMessage({ type: "preparing", message }),
+        mode,
       );
-      cache.set(color, tables);
+      cache.set(key, tables);
     }
     let pending = [];
     const flush = () => {

@@ -93,7 +93,7 @@ function distances(a, b, seeds) {
   return d;
 }
 const graphCache = new Map();
-export function prepare(color, progress = () => {}) {
+export function prepare(color, progress = () => {}, mode = "fb") {
   const groups = physicalGroups(),
     centers = new Set(groups.filter((g) => g.length === 1).flat());
   const centerOrbits = orbits.filter((o) => centers.has(o[0]));
@@ -107,7 +107,7 @@ export function prepare(color, progress = () => {}) {
   const cornerOrbit = orbits.find((o) =>
     groups.some((g) => g.length === 4 && g.includes(o[0])),
   );
-  const all = goalsFor(color),
+  const all = goalsFor(color, mode),
     { g } = builtinPatterns();
   const bases = all.filter((v) =>
     v.first.every(([id, c]) => solved[id].color === c),

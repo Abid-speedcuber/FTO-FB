@@ -14,15 +14,20 @@ import {
   moves,
 } from "../src/model/fto.js";
 const tables = new Map();
-const get = (color) => {
-  if (!tables.has(color)) tables.set(color, prepare(color));
-  return tables.get(color);
+const get = (color, mode = "fb") => {
+  const key = `${color}:${mode}`;
+  if (!tables.has(key))
+    tables.set(
+      key,
+      prepare(color, () => {}, mode),
+    );
+  return tables.get(key);
 };
-function brute(scramble, color, max) {
+function brute(scramble, color, max, mode = "fb") {
   const root = stickerPositions(scramble);
   let level = [{ ps: root, path: [] }];
   for (let d = 0; d <= max; d++) {
-    const found = level.filter((s) => matchingGoal(s.ps, color));
+    const found = level.filter((s) => matchingGoal(s.ps, color, mode));
     if (found.length) return found.map((s) => s.path.join(","));
     level = level.flatMap((s) =>
       permutations.flatMap((p, m) =>
@@ -168,4 +173,107 @@ test("reported scramble is solved using standard CIF input and output", () => {
   assert.equal(result.depth, 10);
   assert.equal(result.count, 56);
   assert.equal(count, 56);
+});
+
+test("FC+1 is a six-piece first center plus one three-piece triplet", () => {
+  for (let color = 0; color < 8; color++) {
+    const goals = goalsFor(color, "fc+1").filter((v) =>
+      v.first.every(([id, c]) => solved[id].color === c),
+    );
+    assert.equal(goals.length, 3);
+    const full = goalsFor(color).filter((v) =>
+      v.first.every(([id, c]) => solved[id].color === c),
+    );
+    const firstCenter = new Set(
+      full[0].first
+        .filter(([id]) =>
+          full.every((v) => v.first.some(([other]) => other === id)),
+        )
+        .map(([id]) => id),
+    );
+    assert.equal(firstCenter.size, 9);
+    for (const goal of goals) {
+      const ids = new Set(goal.first.map(([id]) => id));
+      const pieces = physicalGroups().filter((g) =>
+        g.some((id) => ids.has(id)),
+      );
+      assert.equal(goal.first.length, 15);
+      assert.equal(pieces.length, 9);
+      assert.equal(pieces.filter((g) => g.length === 4).length, 1);
+      assert.equal(pieces.filter((g) => g.length === 2).length, 3);
+      assert.equal(pieces.filter((g) => g.length === 1).length, 5);
+      assert.ok([...firstCenter].every((id) => ids.has(id)));
+      const triplet = pieces.filter((g) =>
+        g.every((id) => !firstCenter.has(id)),
+      );
+      assert.deepEqual(triplet.map((g) => g.length).sort(), [1, 1, 4]);
+      assert.equal(
+        full.filter((v) =>
+          goal.first.every(([id, c]) =>
+            v.first.some(([p, color]) => p === id && color === c),
+          ),
+        ).length,
+        2,
+      );
+    }
+  }
+});
+test("FC+1 searches all three triplets in all twelve poses on every color", () => {
+  const sc = parseScramble("R U F' L BR U' BL D R' B F U L' D BR' F");
+  for (let color = 0; color < 8; color++) {
+    const t = get(color, "fc+1");
+    assert.deepEqual(
+      t.options.map((o) => o.targets.length),
+      [12, 12, 12],
+    );
+    assert.deepEqual(
+      t.corners.map((c) => c.size),
+      [12, 12, 12],
+    );
+    assert.equal(solve(t, []).depth, 0);
+    const result = solve(t, sc, {
+      onSolution: (solution) => {
+        const positions = stickerPositions([...sc, ...solution.moves]);
+        assert.ok(matchingGoal(positions, color, "fc+1"));
+        const mask = candidateMask(color);
+        assert.ok(
+          solution.target.first.every(([slot]) =>
+            mask.has(positions.indexOf(slot)),
+          ),
+        );
+      },
+      maxNodes: 100000000,
+    });
+    assert.ok(result.count > 0);
+  }
+});
+test("FC+1 enumeration matches independent exhaustive shallow search", () => {
+  for (const [text, color] of [
+    ["R U F", 0],
+    ["BR U' BL", 1],
+    ["R F'", 0],
+  ]) {
+    const sc = parseScramble(text),
+      found = [];
+    const result = solve(get(color, "fc+1"), sc, {
+      onSolution: (s) => found.push(s.moves.join(",")),
+    });
+    assert.deepEqual(
+      found.sort(),
+      brute(sc, color, result.depth, "fc+1").sort(),
+    );
+  }
+});
+test("FC+1 can stop at nine pieces without completing a full block", () => {
+  const sc = parseScramble("R U F' L BR U'");
+  const result = solve(get(0, "fc+1"), sc, {
+    onSolution: (s) =>
+      assert.equal(
+        matchingGoal(stickerPositions([...sc, ...s.moves]), 0),
+        undefined,
+      ),
+  });
+  assert.equal(result.depth, 4);
+  assert.equal(result.count, 8);
+  assert.equal(solve(get(0), sc).depth, 6);
 });
