@@ -55,6 +55,8 @@ function automaton(orbit, ids, mode = "positions") {
   return {
     orbit,
     local,
+    kind: mode,
+    count: ids.length,
     encode,
     decode,
     codes,
@@ -109,30 +111,41 @@ export function prepare(color, progress = () => {}, mode = "fb") {
   );
   const all = goalsFor(color, mode),
     { g } = builtinPatterns();
-  const bases = all.filter((v) =>
+  const pseudo = mode === "pseudo-arrow" || mode === "pseudo-fc+1";
+  const referenceMode =
+    mode === "pseudo-arrow" ? "arrow" : mode === "pseudo-fc+1" ? "fc+1" : mode;
+  const referenceBases = goalsFor(color, referenceMode).filter((v) =>
     v.first.every(([id, c]) => solved[id].color === c),
   );
-  const required = bases.map((v) => new Set(v.first.map(([id]) => id)));
+  const bases = pseudo
+    ? [...new Map(all.map((v) => [v.cornerSource, v])).values()]
+    : referenceBases;
+  const required = referenceBases.map(
+    (v) => new Set(v.first.map(([id]) => id)),
+  );
   const edgeIds = groups
     .filter(
       (p) =>
         p.length === 2 && p.some((s) => required.some((set) => set.has(s))),
     )
     .map((p) => p.find((s) => edgeOrbit.includes(s)));
-  const cornerIds = required.map((set) =>
-    groups
-      .filter((p) => p.length === 4 && p.some((s) => set.has(s)))
-      .map((p) => p.find((s) => cornerOrbit.includes(s))),
-  );
+  const cornerIds = pseudo
+    ? bases.map((v) => [v.cornerSource])
+    : required.map((set) =>
+        groups
+          .filter((p) => p.length === 4 && p.some((s) => set.has(s)))
+          .map((p) => p.find((s) => cornerOrbit.includes(s))),
+      );
   const faceIds = faceOrbit.filter((s) => solved[s].color === color);
   function graph(key, orbit, ids, mode) {
-    if (!graphCache.has(key)) graphCache.set(key, automaton(orbit, ids, mode));
+    if (!graphCache.has(key))
+      graphCache.set(key, { ...automaton(orbit, ids, mode), id: key });
     return graphCache.get(key);
   }
   progress("Building exact projection graphs");
   const edge = graph(`e${edgeIds}`, edgeOrbit, edgeIds),
     face = graph(`f${color}`, faceOrbit, faceIds, "set");
-  const hasOtherCenters = bases.some((base) =>
+  const hasOtherCenters = referenceBases.some((base) =>
     base.first.some(([s]) => centers.has(s) && otherOrbit.includes(s)),
   );
   const center = hasOtherCenters
@@ -149,11 +162,21 @@ export function prepare(color, progress = () => {}, mode = "fb") {
   };
   const options = bases.map((base, i) => {
     const targets = all
-      .filter((v) => v.up === base.up)
+      .filter((v) =>
+        pseudo ? v.cornerSource === base.cornerSource : v.up === base.up,
+      )
       .flatMap((v) => {
-        const c = coordinate(corners[i], cornerIds[i], v.rotation);
+        const c = pseudo
+          ? corners[i].index.get(
+              corners[i].encode([corners[i].local.get(v.cornerSlot)]),
+            )
+          : coordinate(corners[i], cornerIds[i], v.rotation);
+        if (pseudo && !corners[i].local.has(v.cornerSlot)) return [];
+        const shapeSlots = new Set(
+          (v.shapeFirst ?? v.first).map(([slot]) => slot),
+        );
         const requiredEdges = edgeIds.flatMap((id, k) =>
-          required[i].has(id)
+          shapeSlots.has(g.permutations[v.rotation][id])
             ? [[k, edge.local.get(g.permutations[v.rotation][id])]]
             : [],
         );
@@ -317,4 +340,61 @@ export function solve(
     visit(start, depth, -1, 0);
     if (count) return { depth, nodes, count };
   }
+}
+
+// Functions are reconstructed after IndexedDB structured-clones the graph data.
+export function dehydrateTables(tables) {
+  const graphs = new Map();
+  const pack = (graph) => {
+    if (!graphs.has(graph.id)) {
+      const { encode, decode, ...data } = graph;
+      graphs.set(graph.id, data);
+    }
+    return graph.id;
+  };
+  const table = {
+    ...tables,
+    edge: pack(tables.edge),
+    face: pack(tables.face),
+    center: pack(tables.center),
+    corners: tables.corners.map(pack),
+    options: tables.options.map((o) => ({ ...o, corner: pack(o.corner) })),
+  };
+  return { graphs: [...graphs.values()], table };
+}
+export function rehydrateTables({ graphs, table }) {
+  const loaded = new Map(
+    graphs.map((data) => {
+      const graph = {
+        ...data,
+        encode(values) {
+          if (data.kind === "colors")
+            return values.reduce((v, c, i) => v | (c << (2 * i)), 0);
+          if (data.kind === "set") values = [...values].sort((a, b) => a - b);
+          return values.reduce((v, p, i) => v + p * 12 ** i, 0);
+        },
+        decode(code) {
+          return Array.from({ length: data.count }, (_, i) =>
+            data.kind === "colors"
+              ? (code >>> (2 * i)) & 3
+              : Math.floor(code / 12 ** i) % 12,
+          );
+        },
+      };
+      graphCache.set(data.id, graph);
+      return [data.id, graph];
+    }),
+  );
+  const unpack = (id) => {
+    if (!loaded.has(id)) throw new Error("Incomplete saved tables");
+    return loaded.get(id);
+  };
+  return {
+    ...table,
+    edge: unpack(table.edge),
+    face: unpack(table.face),
+    center: unpack(table.center),
+    corners: table.corners.map(unpack),
+    options: table.options.map((o) => ({ ...o, corner: unpack(o.corner) })),
+  };
 }

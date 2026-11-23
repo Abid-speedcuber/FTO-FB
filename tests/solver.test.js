@@ -387,3 +387,139 @@ test("Arrow leaves the cropped bottom free and first center leaves triplets free
   assert.equal(fc.count, 2);
   assert.ok(withoutArrow > 0);
 });
+
+test("pseudo modes offer exactly three selected-color triplets in both orientations at each slot", () => {
+  const pieces = physicalGroups();
+  const pieceSize = new Map(
+    pieces.flatMap((g) => g.map((id) => [id, g.length])),
+  );
+  for (let color = 0; color < 8; color++)
+    for (const mode of ["pseudo-arrow", "pseudo-fc+1"]) {
+      const goals = goalsFor(color, mode);
+      assert.equal(goals.length, 432);
+      const groups = new Map();
+      for (const goal of goals) {
+        const key = `${goal.rotation}:${goal.up}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(goal);
+        const corner = pieces.find((g) => g.includes(goal.cornerSource));
+        assert.equal(corner.length, 4);
+        assert.ok(corner.some((id) => solved[id].color === color));
+        assert.equal(goal.triplet.length, 6);
+        assert.equal(goal.first.length, mode === "pseudo-arrow" ? 11 : 15);
+        const cornerStickers = goal.triplet.filter(
+          ([s]) => pieceSize.get(s) === 4,
+        );
+        const centers = goal.triplet.filter(([s]) => pieceSize.get(s) === 1);
+        assert.equal(cornerStickers.length, 4);
+        assert.equal(centers.length, 2);
+        centers.forEach(([s, c]) =>
+          assert.ok(
+            cornerStickers.some(
+              ([p, cornerColor]) =>
+                Math.floor(p / 9) === Math.floor(s / 9) && cornerColor === c,
+            ),
+            "triplet center must match its corner internally",
+          ),
+        );
+        const tripletSlots = new Set(goal.triplet.map(([s]) => s));
+        assert.deepEqual(
+          goal.first.filter(([s]) => !tripletSlots.has(s)),
+          goal.shapeFirst.filter(([s]) => !tripletSlots.has(s)),
+        );
+      }
+      for (const placements of groups.values()) {
+        assert.equal(placements.length, 6);
+        assert.equal(new Set(placements.map((p) => p.cornerSource)).size, 3);
+        for (const id of new Set(placements.map((p) => p.cornerSource)))
+          assert.equal(
+            new Set(
+              placements
+                .filter((p) => p.cornerSource === id)
+                .map((p) => p.cornerSlot),
+            ).size,
+            2,
+          );
+      }
+    }
+});
+test("pseudo modes solve every selected color in all slot/orientation combinations", () => {
+  const sc = parseScramble("R U F' L BR U'");
+  for (let color = 0; color < 8; color++)
+    for (const mode of ["pseudo-arrow", "pseudo-fc+1"]) {
+      const t = get(color, mode);
+      const visible = candidateMask(color);
+      assert.deepEqual(
+        t.options.map((o) => o.targets.length),
+        [72, 72, 72],
+      );
+      assert.equal(solve(t, []).depth, 0);
+      const r = solve(t, sc, {
+        onSolution: (s) => {
+          const ps = stickerPositions([...sc, ...s.moves]);
+          assert.ok(matchingGoal(ps, color, mode));
+          assert.ok(
+            s.target.first.every(([slot]) => visible.has(ps.indexOf(slot))),
+          );
+        },
+        maxNodes: 100000000,
+      });
+      assert.ok(r.count > 0);
+    }
+});
+test("pseudo mode optimal enumeration matches independent shallow exhaustive search", () => {
+  for (const mode of ["pseudo-arrow", "pseudo-fc+1"])
+    for (const [text, color] of [
+      ["R U F", 0],
+      ["BR U' BL", 1],
+      ["R F'", 2],
+    ]) {
+      const sc = parseScramble(text),
+        found = [];
+      const r = solve(get(color, mode), sc, {
+        onSolution: (s) => found.push(s.moves.join(",")),
+      });
+      assert.deepEqual(found.sort(), brute(sc, color, r.depth, mode).sort());
+    }
+});
+test("pseudo modes accept useful formed triplets that the ordinary modes reject", () => {
+  const sc = parseScramble("R U F' L BR U'");
+  for (const [mode, plain, depth, count] of [
+    ["pseudo-arrow", "arrow", 1, 1],
+    ["pseudo-fc+1", "fc+1", 2, 2],
+  ]) {
+    const r = solve(get(0, mode), sc, {
+      onSolution: (s) =>
+        assert.equal(
+          matchingGoal(stickerPositions([...sc, ...s.moves]), 0, plain),
+          undefined,
+        ),
+    });
+    assert.equal(r.depth, depth);
+    assert.equal(r.count, count);
+  }
+});
+test("saved search tables round-trip through structured clone without losing optimal solutions", async () => {
+  const { dehydrateTables, rehydrateTables } =
+    await import("../src/model/search.js");
+  for (const mode of ["fc", "pseudo-arrow", "pseudo-fc+1"]) {
+    const original = get(0, mode),
+      sc = parseScramble("R U F' L BR U'"),
+      expected = [],
+      actual = [];
+    const packed = structuredClone(dehydrateTables(original));
+    assert.equal(
+      new Set(packed.graphs.map((g) => g.id)).size,
+      packed.graphs.length,
+    );
+    const restored = rehydrateTables(packed);
+    const a = solve(original, sc, {
+      onSolution: (s) => expected.push(s.moves.join(",")),
+    });
+    const b = solve(restored, sc, {
+      onSolution: (s) => actual.push(s.moves.join(",")),
+    });
+    assert.equal(a.depth, b.depth);
+    assert.deepEqual(actual, expected);
+  }
+});

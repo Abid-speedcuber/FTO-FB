@@ -1,16 +1,21 @@
 import { prepare, solve } from "./model/search.js";
+import { loadTables, saveTables } from "./model/table-cache.js";
 const cache = new Map();
-self.onmessage = ({ data: { color, scramble, mode = "fb" } }) => {
+self.onmessage = async ({ data: { color, scramble, mode = "fb" } }) => {
   try {
     const start = performance.now();
     const key = `${color}:${mode}`;
     let tables = cache.get(key);
     if (!tables) {
-      tables = prepare(
-        color,
-        (message) => self.postMessage({ type: "preparing", message }),
-        mode,
-      );
+      tables = await loadTables(color, mode);
+      if (!tables) {
+        tables = prepare(
+          color,
+          (message) => self.postMessage({ type: "preparing", message }),
+          mode,
+        );
+        await saveTables(color, mode, tables);
+      }
       cache.set(key, tables);
     }
     let pending = [];

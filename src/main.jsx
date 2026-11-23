@@ -137,6 +137,8 @@ function App() {
               <option value="fb">FB</option>
               <option value="fc+1">FC+1</option>
               <option value="arrow">Arrow</option>
+              <option value="pseudo-arrow">Pseudo Arrow</option>
+              <option value="pseudo-fc+1">Pseudo FC+1</option>
               <option value="fc">First center</option>
             </select>
           </label>
@@ -165,7 +167,7 @@ function App() {
         <div className="results">
           <div className="results-bar" aria-live="polite">
             {status === "preparing" ? (
-              <span>Building tables…</span>
+              <span>Preparing…</span>
             ) : status === "searching" ? (
               <span>
                 Depth {progress.depth ?? 0} · {solutions.length} found

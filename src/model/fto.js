@@ -78,7 +78,59 @@ export function colorsAt(positions) {
   positions.forEach((p, i) => (colors[p] = solved[i].color));
   return colors;
 }
+const goalCache = new Map();
 export function goalsFor(color, mode = "fb") {
+  const key = `${color}:${mode}`;
+  if (goalCache.has(key)) return goalCache.get(key);
+  if (mode === "pseudo-arrow" || mode === "pseudo-fc+1") {
+    const baseMode = mode === "pseudo-arrow" ? "arrow" : "fc+1";
+    const { g } = builtinPatterns();
+    const shapes = goalsFor(color, baseMode);
+    const pieces = physicalGroups();
+    const cornerOrbit = orbits.find((o) =>
+      pieces.some((p) => p.length === 4 && p.includes(o[0])),
+    );
+    const sources = goalsFor(color, "fc+1")
+      .filter((v) => v.first.every(([p, c]) => solved[p].color === c))
+      .map((v) => {
+        const centerSlots = new Set(v.firstCenter.map(([p]) => p));
+        const triplet = v.plusOne.filter(([p]) => !centerSlots.has(p));
+        const corner = pieces.find(
+          (p) =>
+            p.length === 4 && p.every((id) => triplet.some(([s]) => s === id)),
+        );
+        return {
+          triplet,
+          cornerSource: corner.find((id) => cornerOrbit.includes(id)),
+        };
+      });
+    const goals = [];
+    for (const shape of shapes) {
+      const centerSlots = new Set(shape.firstCenter.map(([p]) => p));
+      const targetSlots = new Set(
+        shape.plusOne.filter(([p]) => !centerSlots.has(p)).map(([p]) => p),
+      );
+      const fixed = shape.first.filter(([p]) => !targetSlots.has(p));
+      for (const source of sources)
+        for (let rotation = 0; rotation < 24; rotation++) {
+          const triplet = source.triplet.map(([p, c]) => [
+            g.permutations[rotation][p],
+            c,
+          ]);
+          if (!triplet.every(([p]) => targetSlots.has(p))) continue;
+          goals.push({
+            ...shape,
+            first: [...fixed, ...triplet],
+            shapeFirst: shape.first,
+            triplet: triplet,
+            cornerSource: source.cornerSource,
+            cornerSlot: g.permutations[rotation][source.cornerSource],
+          });
+        }
+    }
+    goalCache.set(key, goals);
+    return goals;
+  }
   const fields = {
     fb: "first",
     "fc+1": "plusOne",
@@ -99,9 +151,12 @@ export function goalsFor(color, mode = "fb") {
       return true;
     });
   }
-  return mode === "fb"
-    ? goals
-    : goals.map((v) => ({ ...v, first: v[fields[mode]] }));
+  const result =
+    mode === "fb"
+      ? goals
+      : goals.map((v) => ({ ...v, first: v[fields[mode]] }));
+  goalCache.set(key, result);
+  return result;
 }
 export function matchingGoal(positions, color, mode = "fb") {
   const colors = colorsAt(positions);
