@@ -275,10 +275,28 @@ export function initialCoordinates(t, scramble) {
     ...t.corners.map((c, i) => positional(c, t.cornerIds[i])),
   ];
 }
+export function lowerBound(t, s) {
+  const ef = t.def[s[0] * t.face.size + s[1]];
+  let best = 255;
+  for (let i = 0; i < t.options.length; i++) {
+    const o = t.options[i];
+    best = Math.min(
+      best,
+      Math.max(ef, o.dc[s[2]], o.dec[s[0] * o.corner.size + s[3 + i]]),
+    );
+  }
+  return best;
+}
 export function solve(
   t,
   scramble,
-  { onProgress = () => {}, onSolution = () => {}, maxNodes = Infinity } = {},
+  {
+    onProgress = () => {},
+    onSolution = () => {},
+    maxNodes = Infinity,
+    minDepth = 0,
+    maxDepth = Infinity,
+  } = {},
 ) {
   const start = initialCoordinates(t, scramble),
     graphs = [t.edge, t.face, t.center, ...t.corners];
@@ -286,16 +304,6 @@ export function solve(
     count = 0;
   const path = [],
     frames = Array.from({ length: 128 }, () => new Uint32Array(graphs.length));
-  function heuristic(s) {
-    const ef = t.def[s[0] * t.face.size + s[1]];
-    let best = 255;
-    for (let i = 0; i < t.options.length; i++) {
-      const o = t.options[i],
-        h = Math.max(ef, o.dc[s[2]], o.dec[s[0] * o.corner.size + s[3 + i]]);
-      if (h < best) best = h;
-    }
-    return best;
-  }
   function goal(s) {
     for (let i = 0; i < t.options.length; i++)
       for (const target of t.options[i].targets)
@@ -314,7 +322,7 @@ export function solve(
     nodes++;
     if (nodes > maxNodes) throw new Error("Search node limit reached");
     if ((nodes & 262143) === 0) onProgress({ depth, nodes, count });
-    if (heuristic(s) > remaining) return;
+    if (lowerBound(t, s) > remaining) return;
     if (!remaining) {
       const target = goal(s);
       if (target) {
@@ -334,10 +342,53 @@ export function solve(
       path.pop();
     }
   }
-  let depth = heuristic(start);
-  for (; ; depth++) {
+  let depth = Math.max(minDepth, lowerBound(t, start));
+  for (; depth <= maxDepth; depth++) {
     onProgress({ depth, nodes, count });
     visit(start, depth, -1, 0);
+    if (count) return { depth, nodes, count };
+  }
+  return { depth: null, nodes, count: 0 };
+}
+
+// Search the union of all selected-color goals at a common depth. No color is
+// searched to a longer individual optimum, and ties retain their own target.
+export function solveSelected(
+  entries,
+  scramble,
+  { onProgress = () => {}, onSolution = () => {}, maxNodes = Infinity } = {},
+) {
+  const selected = [
+    ...new Map(entries.map((entry) => [entry.color, entry])).values(),
+  ];
+  if (!selected.length) throw new Error("Select at least one color.");
+  const choices = selected.map((entry) => ({
+    ...entry,
+    bound: lowerBound(entry.tables, initialCoordinates(entry.tables, scramble)),
+  }));
+  let nodes = 0,
+    count = 0;
+  for (let depth = Math.min(...choices.map((c) => c.bound)); ; depth++) {
+    for (const choice of choices) {
+      if (choice.bound > depth) continue;
+      const result = solve(choice.tables, scramble, {
+        minDepth: depth,
+        maxDepth: depth,
+        maxNodes: maxNodes - nodes,
+        onProgress: (progress) =>
+          onProgress({
+            depth,
+            nodes: nodes + progress.nodes,
+            count,
+            color: choice.color,
+          }),
+        onSolution: (solution) => {
+          count++;
+          onSolution({ ...solution, color: choice.color });
+        },
+      });
+      nodes += result.nodes;
+    }
     if (count) return { depth, nodes, count };
   }
 }
@@ -365,6 +416,7 @@ export function dehydrateTables(tables) {
 export function rehydrateTables({ graphs, table }) {
   const loaded = new Map(
     graphs.map((data) => {
+      if (graphCache.has(data.id)) return [data.id, graphCache.get(data.id)];
       const graph = {
         ...data,
         encode(values) {

@@ -217,3 +217,17 @@ export function candidateMask(color) {
     .forEach((id) => visible.add(id));
   return visible;
 }
+
+// Resolve interchangeable center identities from the selected card's completed
+// state, then keep exactly its whole physical pieces visible during playback.
+export function solutionMask(positions, target) {
+  if (!target) return new Set();
+  const idsBySlot = new Uint8Array(72);
+  positions.forEach((slot, id) => (idsBySlot[slot] = id));
+  const required = new Set(target.first.map(([slot]) => idsBySlot[slot]));
+  return new Set(
+    physicalGroups()
+      .filter((piece) => piece.some((id) => required.has(id)))
+      .flat(),
+  );
+}

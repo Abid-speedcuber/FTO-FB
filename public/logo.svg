@@ -1,27 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 168" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 3 320 177" fill="none">
   <title>First Block</title>
+  <!-- Orthographic camera tilted 12 degrees toward the white top face. -->
   <defs>
-    <!-- Cut every logo layer away, including faces behind the open front. -->
-    <mask id="front-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="320" height="168" style="mask-type:luminance">
-      <rect width="320" height="168" fill="white"/>
-      <path d="M108 108H212L264 160H56Z" fill="black"/>
+    <mask id="front-cut" maskUnits="userSpaceOnUse" x="0" y="3" width="320" height="177" style="mask-type:luminance">
+      <rect y="3" width="320" height="177" fill="white"/>
+      <path d="M108 139.716L212 139.716L264 175.29L56 175.29Z" fill="black"/>
     </mask>
   </defs>
   <g mask="url(#front-cut)" stroke="#000" stroke-width="3.5" stroke-linejoin="round">
-    <path d="M4 4H316V108L264 160H56L4 108Z" fill="#000"/>
+    <path d="M4 7.409L316 7.409L316 109.136L264 175.29L56 175.29L4 109.136Z" fill="#000"/>
     <g fill="#ff3038">
-      <path d="M4 4L56 56 4 108Z"/>
-      <path d="M4 108L56 56V160Z"/>
-      <path d="M56 56L108 108 56 160Z"/>
+      <path d="M4 7.409L56 73.562L4 109.136Z"/>
+      <path d="M4 109.136L56 73.562L56 175.29Z"/>
+      <path d="M56 73.562L108 139.716L56 175.29Z"/>
     </g>
     <g fill="#087bff">
-      <path d="M316 4V108L264 56Z"/>
-      <path d="M316 108L264 160V56Z"/>
-      <path d="M264 56V160L212 108Z"/>
+      <path d="M316 7.409L316 109.136L264 73.562Z"/>
+      <path d="M316 109.136L264 175.29L264 73.562Z"/>
+      <path d="M264 73.562L264 175.29L212 139.716Z"/>
     </g>
-    <path d="M4 4H316L160 160Z" fill="#fff"/>
-    <path d="M108 4L212 108M212 4L108 108M56 56H264M108 108H212M108 4L56 56M212 4L264 56M160 56L108 108M160 56L212 108"/>
+    <path d="M4 7.409L316 7.409L212 139.716L108 139.716Z" fill="#fff"/>
+    <path d="M108 7.409L212 139.716M212 7.409L108 139.716M56 73.562L264 73.562M108 7.409L56 73.562M212 7.409L264 73.562"/>
   </g>
-  <!-- Draw the aperture border after masking, so every edge keeps its full width. -->
-  <path d="M108 108H212L264 160H56Z" stroke="#000" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M108 139.716L212 139.716L264 175.29L56 175.29Z" stroke="#000" stroke-width="3.5" stroke-linejoin="round"/>
 </svg>

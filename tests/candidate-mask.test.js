@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import {
   candidateMask,
+  solutionMask,
   parseScramble,
   stickerPositions,
   matchingGoal,
@@ -39,6 +40,13 @@ test("reported white block keeps its interchangeable red center visible", () => 
   assert.equal(positions[10], 39);
   assert.equal(candidateMask(0).has(10), true);
   assertVisibleBlock(positions, 0, target);
+  const cardMask = solutionMask(positions, target);
+  assert.ok(cardMask.has(10));
+  assert.equal(cardMask.size, 21);
+  assert.equal(
+    physicalGroups().filter((g) => g.some((id) => cardMask.has(id))).length,
+    12,
+  );
 });
 test("default camera is the simulator CIF hold", () => {
   const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);

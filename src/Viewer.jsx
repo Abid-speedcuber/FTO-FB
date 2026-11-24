@@ -4,10 +4,11 @@ import {
   solvedState,
   applyMove,
   moves,
-  candidateMask,
+  solutionMask,
+  stickerPositions,
   FACES,
 } from "./model/fto.js";
-export default function Viewer({ scramble, color, solution, selectionKey }) {
+export default function Viewer({ scramble, solution, selectionKey }) {
   const host = useRef(),
     viewer = useRef(),
     frames = useRef([]),
@@ -54,12 +55,15 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
       state = applyMove(state, moves[m]);
       frames.current.push(state);
     }
-    mask.current = candidateMask(color);
+    mask.current = solutionMask(
+      stickerPositions([...scramble, ...(solution?.moves ?? [])]),
+      solution?.target,
+    );
     index.current = 0;
     setStep(0);
     viewer.current?.setPuzzle(3, frames.current[0], mask.current);
     if (solution) raf.current = requestAnimationFrame(() => play());
-  }, [scramble, color, selectionKey]);
+  }, [scramble, solution, selectionKey]);
   function play() {
     if (!solution?.moves.length) return;
     halt();
@@ -118,7 +122,9 @@ export default function Viewer({ scramble, color, solution, selectionKey }) {
               viewer.current?.face(
                 FACES[
                   Math.floor(
-                    solution.target.first.find(([, c]) => c === color)[0] / 9,
+                    solution.target.first.find(
+                      ([, c]) => c === solution.color,
+                    )[0] / 9,
                   )
                 ].normal,
               )

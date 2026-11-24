@@ -1,22 +1,32 @@
-import { prepare, solve } from "./model/search.js";
+import { prepare, solveSelected } from "./model/search.js";
 import { loadTables, saveTables } from "./model/table-cache.js";
 const cache = new Map();
-self.onmessage = async ({ data: { color, scramble, mode = "fb" } }) => {
+self.onmessage = async ({ data: { colors, color, scramble, mode = "fb" } }) => {
   try {
     const start = performance.now();
-    const key = `${color}:${mode}`;
-    let tables = cache.get(key);
-    if (!tables) {
-      tables = await loadTables(color, mode);
+    const selected = [
+      ...new Set(colors ?? (color === undefined ? [] : [color])),
+    ];
+    if (!selected.length) throw new Error("Select at least one color.");
+    if (selected.some((c) => !Number.isInteger(c) || c < 0 || c > 7))
+      throw new Error("Invalid color selection.");
+    const entries = [];
+    for (const color of selected) {
+      const key = `${color}:${mode}`;
+      let tables = cache.get(key);
       if (!tables) {
-        tables = prepare(
-          color,
-          (message) => self.postMessage({ type: "preparing", message }),
-          mode,
-        );
-        await saveTables(color, mode, tables);
+        tables = await loadTables(color, mode);
+        if (!tables) {
+          tables = prepare(
+            color,
+            (message) => self.postMessage({ type: "preparing", message }),
+            mode,
+          );
+          await saveTables(color, mode, tables);
+        }
+        cache.set(key, tables);
       }
-      cache.set(key, tables);
+      entries.push({ color, tables });
     }
     let pending = [];
     const flush = () => {
@@ -25,7 +35,7 @@ self.onmessage = async ({ data: { color, scramble, mode = "fb" } }) => {
         pending = [];
       }
     };
-    const result = solve(tables, scramble, {
+    const result = solveSelected(entries, scramble, {
       onProgress: (progress) => {
         flush();
         self.postMessage({ type: "progress", ...progress });

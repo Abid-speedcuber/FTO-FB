@@ -6,9 +6,13 @@ import "./style.css";
 
 function App() {
   const [text, setText] = useState("");
-  const [color, setColor] = useState(0),
+  const [colors, setColors] = useState([0]),
     [mode, setMode] = useState("fb");
-  const [active, setActive] = useState({ scramble: [], color: 0, mode: "fb" });
+  const [active, setActive] = useState({
+    scramble: [],
+    colors: [0],
+    mode: "fb",
+  });
   const [solutions, setSolutions] = useState([]),
     [selected, setSelected] = useState(-1),
     [replay, setReplay] = useState(0);
@@ -23,6 +27,10 @@ function App() {
   const busy = status === "preparing" || status === "searching";
   function find(e) {
     e.preventDefault();
+    if (!colors.length) {
+      setMessage("Select at least one color.");
+      return;
+    }
     let scramble;
     try {
       scramble = parseScramble(text);
@@ -36,7 +44,7 @@ function App() {
         { type: "module" },
       );
     const job = ++run.current;
-    setActive({ scramble, color, mode });
+    setActive({ scramble, colors, mode });
     setSolutions([]);
     setSelected(-1);
     setPage(1);
@@ -65,7 +73,7 @@ function App() {
       setStatus("error");
       setMessage(error.message || "Solver failed. Try again.");
     };
-    worker.current.postMessage({ scramble, color, mode });
+    worker.current.postMessage({ scramble, colors, mode });
   }
   function stop() {
     run.current++;
@@ -101,7 +109,7 @@ function App() {
             src={`${import.meta.env.BASE_URL}logo.svg`}
             alt=""
             aria-hidden="true"
-            width="64"
+            width="62"
             height="34"
           />
           <h1>
@@ -114,8 +122,27 @@ function App() {
           <label htmlFor="scramble">
             Scramble <small>CIF</small>
           </label>
-          <textarea
+          <input
+            type="text"
             id="scramble"
+            autoComplete="off"
+            autoCapitalize="off"
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text/plain");
+              if (!/[\r\n\t]/.test(pasted)) return;
+              e.preventDefault();
+              const input = e.currentTarget,
+                start = input.selectionStart ?? text.length,
+                end = input.selectionEnd ?? text.length;
+              const normalized = pasted.replace(/\s+/g, " ");
+              setText(text.slice(0, start) + normalized + text.slice(end));
+              requestAnimationFrame(() =>
+                input.setSelectionRange(
+                  start + normalized.length,
+                  start + normalized.length,
+                ),
+              );
+            }}
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={busy}
@@ -123,22 +150,36 @@ function App() {
             placeholder="Scramble"
           />
           <div className="toolbar">
-            <fieldset disabled={busy} aria-label="Block color">
-              <legend>{names[color]}</legend>
+            <fieldset disabled={busy} aria-label="Block colors">
+              <legend>
+                {colors.length <= 2
+                  ? colors.map((c) => names[c]).join(", ") || "Colors"
+                  : `${colors.length} colors`}
+              </legend>
               <div className="colors">
                 {FACES.map((face, i) => (
-                  <button
-                    type="button"
+                  <label
                     key={i}
-                    className={`swatch ${color === i ? "chosen" : ""}`}
+                    className={`swatch ${colors.includes(i) ? "chosen" : ""}`}
                     style={{ "--color": face.color }}
-                    aria-label={names[i]}
-                    aria-pressed={color === i}
                     title={names[i]}
-                    onClick={() => setColor(i)}
                   >
-                    {color === i ? "✓" : ""}
-                  </button>
+                    <input
+                      type="checkbox"
+                      aria-label={names[i]}
+                      checked={colors.includes(i)}
+                      onChange={() =>
+                        setColors((old) =>
+                          old.includes(i)
+                            ? old.filter((c) => c !== i)
+                            : [...old, i].sort((a, b) => a - b),
+                        )
+                      }
+                    />
+                    <span aria-hidden="true">
+                      {colors.includes(i) ? "✓" : ""}
+                    </span>
+                  </label>
                 ))}
               </div>
             </fieldset>
@@ -215,14 +256,22 @@ function App() {
                     <button
                       key={n}
                       className={`solution-card ${selected === n ? "selected" : ""}`}
-                      aria-label={`Play solution ${n + 1}: ${alg}`}
+                      aria-label={`Play ${names[solution.color]} solution ${n + 1}: ${alg}`}
                       onClick={() => {
                         setSelected(n);
                         setReplay((r) => r + 1);
                       }}
                     >
                       <span className="algorithm">{alg}</span>
-                      <span className="length">{solution.moves.length}</span>
+                      <span className="card-meta">
+                        <span
+                          className="card-color"
+                          style={{ "--color": FACES[solution.color].color }}
+                          aria-hidden="true"
+                        />
+                        {names[solution.color]}
+                        <span className="length">{solution.moves.length}</span>
+                      </span>
                     </button>
                   );
                 })}
@@ -249,7 +298,6 @@ function App() {
           </div>
           <Viewer
             scramble={active.scramble}
-            color={active.color}
             solution={solutions[selected]}
             selectionKey={replay}
           />

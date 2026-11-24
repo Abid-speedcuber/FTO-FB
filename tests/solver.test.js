@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { prepare, solve, initialCoordinates } from "../src/model/search.js";
+import {
+  prepare,
+  solve,
+  solveSelected,
+  initialCoordinates,
+} from "../src/model/search.js";
 import {
   parseScramble,
   permutations,
@@ -12,6 +17,7 @@ import {
   solved,
   candidateMask,
   moves,
+  solutionMask,
 } from "../src/model/fto.js";
 const tables = new Map();
 const get = (color, mode = "fb") => {
@@ -521,5 +527,109 @@ test("saved search tables round-trip through structured clone without losing opt
     });
     assert.equal(a.depth, b.depth);
     assert.deepEqual(actual, expected);
+  }
+});
+
+test("multi-color search returns only the global optimum, with every tied color retained", () => {
+  const entries = [0, 7].map((color) => ({ color, tables: get(color, "fc") }));
+  for (const text of ["R U F", "R U F' L BR U'", "R F", "U R F L", ""]) {
+    const sc = parseScramble(text),
+      singles = entries.map((e) => {
+        const found = [];
+        const result = solve(e.tables, sc, {
+          onSolution: (s) => found.push({ ...s, color: e.color }),
+        });
+        return { ...result, found };
+      });
+    const expectedDepth = Math.min(...singles.map((r) => r.depth));
+    const key = (s) => `${s.color}:${s.moves.join(",")}`;
+    const expected = singles
+      .filter((r) => r.depth === expectedDepth)
+      .flatMap((r) => r.found.map(key))
+      .sort();
+    const actual = [];
+    const result = solveSelected(entries, sc, {
+      onSolution: (s) => {
+        actual.push(key(s));
+        assert.equal(s.moves.length, expectedDepth);
+        assert.ok(
+          matchingGoal(stickerPositions([...sc, ...s.moves]), s.color, "fc"),
+        );
+      },
+    });
+    assert.equal(result.depth, expectedDepth);
+    assert.equal(result.count, expected.length);
+    assert.deepEqual(actual.sort(), expected);
+  }
+});
+test("multi-color search handles every mode, empty selections, and duplicate colors", () => {
+  assert.throws(() => solveSelected([], []), /Select at least one color/);
+  const sc = parseScramble("R F");
+  for (const mode of [
+    "fb",
+    "fc+1",
+    "arrow",
+    "fc",
+    "pseudo-arrow",
+    "pseudo-fc+1",
+  ]) {
+    const entries = [0, 7].map((color) => ({
+        color,
+        tables: get(color, mode),
+      })),
+      actual = [];
+    const singles = entries.map((e) => {
+      const found = [];
+      const r = solve(e.tables, sc, {
+        onSolution: (s) => found.push(`${e.color}:${s.moves.join(",")}`),
+      });
+      return { ...r, found };
+    });
+    const depth = Math.min(...singles.map((s) => s.depth));
+    const expected = singles
+      .filter((s) => s.depth === depth)
+      .flatMap((s) => s.found)
+      .sort();
+    const r = solveSelected([...entries, entries[0]], sc, {
+      onSolution: (s) => actual.push(`${s.color}:${s.moves.join(",")}`),
+    });
+    assert.equal(r.depth, depth);
+    assert.deepEqual(actual.sort(), expected);
+  }
+});
+test("card masks show exactly the selected mode pieces using actual solution identities", () => {
+  assert.equal(solutionMask(stickerPositions([]), null).size, 0);
+  const sc = parseScramble("R U F' L BR U'");
+  for (const [mode, pieces, stickers] of [
+    ["fb", 12, 21],
+    ["fc+1", 9, 15],
+    ["arrow", 6, 11],
+    ["fc", 6, 9],
+    ["pseudo-arrow", 6, 11],
+    ["pseudo-fc+1", 9, 15],
+  ]) {
+    for (const color of [0, 7]) {
+      let seen = 0;
+      solve(get(color, mode), sc, {
+        onSolution: (s) => {
+          seen++;
+          const ps = stickerPositions([...sc, ...s.moves]);
+          const visible = solutionMask(ps, s.target);
+          const groups = physicalGroups().filter((g) =>
+            g.some((id) => visible.has(id)),
+          );
+          assert.equal(groups.length, pieces);
+          assert.equal(visible.size, stickers);
+          assert.ok(groups.every((g) => g.every((id) => visible.has(id))));
+          assert.deepEqual(
+            [...visible].sort((a, b) => a - b),
+            s.target.first
+              .map(([slot]) => ps.indexOf(slot))
+              .sort((a, b) => a - b),
+          );
+        },
+      });
+      assert.ok(seen > 0);
+    }
   }
 });

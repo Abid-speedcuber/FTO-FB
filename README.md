@@ -14,6 +14,8 @@ npm test
 npm run build
 ```
 
+Select one or more colors using the round checkboxes. Search compares their goals at the same depth and shows every solution tied for the **shortest length across the selected colors**; longer per-color solutions are omitted. Each card identifies its color. A color/algorithm pair remains a separate card when one sequence solves more than one selected color, so its piece view is unambiguous.
+
 ## Block and move definitions
 
 The first block uses the exact `builtinPatterns()` definition from the neighboring FTO-simulator. There are three choices of the omitted triple. Each choice can finish in **12 reachable poses: four orbit faces × three orientations**. All 36 targets are searched together; there is no fixed final orientation or required omitted triple.
@@ -24,9 +26,9 @@ The first block uses the exact `builtinPatterns()` definition from the neighbori
 
 **First center** solves three edges and the block color’s three centers (6 pieces / 9 stickers), in any of the 12 orbit poses. Corners and other-orbit centers are unconstrained.
 
-**Pseudo Arrow** and **Pseudo FC+1** use the same attachment shapes as Arrow and FC+1. At each slot, any of the three triplets containing the selected color may be placed in either orientation: six possibilities. Each triplet must remain internally formed (its two centers match its corner), but it need not match the surrounding first-center pieces. All three slots and all 12 orbit poses are searched together. The viewer keeps the same 18 candidate pieces defined.
+**Pseudo Arrow** and **Pseudo FC+1** use the same attachment shapes as Arrow and FC+1. At each slot, any of the three triplets containing the selected color may be placed in either orientation: six possibilities. Each triplet must remain internally formed (its two centers match its corner), but it need not match the surrounding first-center pieces. All three slots and all 12 orbit poses are searched together.
 
-A finished block has 12 physical pieces (21 stickers): two corners, three edges, and seven centers. The union of all three candidate blocks contains 15 physical pieces. The viewer additionally defines all interchangeable centers of the block's four colors, displaying **18 physical pieces (30 stickers): three corners, three edges, the block color’s three centers, and nine centers from the other orbit**. Every other piece is dark gray, with pitch-black outlines. This fixed mask follows piece identity through turns and stays the same across solution cards, so a required same-color center is never hidden. The initial and reset camera use the simulator’s CIF hold.
+A finished block has 12 physical pieces (21 stickers): two corners, three edges, and seven centers. The viewer defines **only the actual pieces in the selected card’s target**: FB 12, FC+1/Pseudo FC+1 9, Arrow/Pseudo Arrow 6, and First center 6. It resolves interchangeable centers from the completed solution, then follows those identities throughout playback. All other pieces remain dark gray with pitch-black outlines. No pieces are defined until a card is selected. The initial and reset camera use the simulator’s CIF hold.
 
 Both directions of the 120° turns on U, R, F, L, B, D, BR, and BL cost one move. Scramble input, printed solutions, playback all use conventional **CIF/csTimer notation**, mapped explicitly to the simulator’s internal geometric faces. Scramble notation accepts whitespace-separated face turns, case-insensitively, with a prime (straight or curly) or `2` for the inverse direction. Rotations, wide turns, comments, and nested algorithm notation are not accepted. An empty scramble is the solved puzzle.
 
@@ -53,7 +55,7 @@ The virtual FTO supports drag-to-orbit, zoom, automatic card playback, pause, st
 
 ## Validation
 
-The Node tests compare all 72 sticker destinations for all 16 turns against a frozen independent csTimer cubie reference, reproduce the reported scramble and replay every solution through that reference, and check inverse/order-three moves, notation, the complete 18-piece mask, all colors and all 12 poses, agreement with an independent exhaustive shallow solver (including the complete solution set), and replay of longer-scramble solutions against the original simulator block detector.
+The Node tests compare all 72 sticker destinations for all 16 turns against a frozen independent csTimer cubie reference, reproduce the reported scramble and replay every solution through that reference, and check inverse/order-three moves, notation, the complete candidate pool and card-specific piece masks, all colors and all 12 poses, agreement with an independent exhaustive shallow solver (including the complete solution set), and replay of longer-scramble solutions against the original simulator block detector.
 
 ## Source and license
 
