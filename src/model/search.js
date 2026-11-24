@@ -280,6 +280,7 @@ export function lowerBound(t, s) {
   let best = 255;
   for (let i = 0; i < t.options.length; i++) {
     const o = t.options[i];
+    if (!o.targets.length) continue;
     best = Math.min(
       best,
       Math.max(ef, o.dc[s[2]], o.dec[s[0] * o.corner.size + s[3 + i]]),
@@ -305,6 +306,7 @@ export function solve(
   const path = [],
     frames = Array.from({ length: 128 }, () => new Uint32Array(graphs.length));
   function goal(s) {
+    const targets = [];
     for (let i = 0; i < t.options.length; i++)
       for (const target of t.options[i].targets)
         if (
@@ -315,8 +317,8 @@ export function solve(
             ([p, c]) => ((t.center.codes[s[2]] >>> (p * 2)) & 3) === c,
           )
         )
-          return target.variant;
-    return null;
+          targets.push(target.variant);
+    return targets;
   }
   function visit(s, remaining, last, level) {
     nodes++;
@@ -324,10 +326,10 @@ export function solve(
     if ((nodes & 262143) === 0) onProgress({ depth, nodes, count });
     if (lowerBound(t, s) > remaining) return;
     if (!remaining) {
-      const target = goal(s);
-      if (target) {
+      const targets = goal(s);
+      if (targets.length) {
         count++;
-        onSolution({ moves: [...path], target });
+        onSolution({ moves: [...path], target: targets[0], targets });
       }
       return;
     }
@@ -356,7 +358,11 @@ export function solve(
 export function solveSelected(
   entries,
   scramble,
-  { onProgress = () => {}, onSolution = () => {}, maxNodes = Infinity } = {},
+  {
+    onProgress = () => {}, onSolution = () => {}, onDepthComplete = () => {},
+    acceptTarget = () => true, includeTarget = () => true,
+    minDepth = 0, maxDepth = Infinity, maxNodes = Infinity,
+  } = {},
 ) {
   const selected = [
     ...new Map(entries.map((entry) => [entry.color, entry])).values(),
@@ -366,31 +372,31 @@ export function solveSelected(
     ...entry,
     bound: lowerBound(entry.tables, initialCoordinates(entry.tables, scramble)),
   }));
-  let nodes = 0,
-    count = 0;
-  for (let depth = Math.min(...choices.map((c) => c.bound)); ; depth++) {
+  let nodes = 0;
+  for (let depth = Math.max(minDepth, Math.min(...choices.map((c) => c.bound))); depth <= maxDepth; depth++) {
+    let count = 0;
     for (const choice of choices) {
       if (choice.bound > depth) continue;
-      const result = solve(choice.tables, scramble, {
-        minDepth: depth,
-        maxDepth: depth,
-        maxNodes: maxNodes - nodes,
-        onProgress: (progress) =>
-          onProgress({
-            depth,
-            nodes: nodes + progress.nodes,
-            count,
-            color: choice.color,
-          }),
+      // Cached broad PDBs stay admissible for these narrower goal sets. Preserve
+      // option indices, since each one has its own corner coordinate.
+      const tables = { ...choice.tables, options: choice.tables.options.map((option) => ({
+        ...option, targets: option.targets.filter((target) => includeTarget(target.variant, choice.color, depth)),
+      })) };
+      if (!tables.options.some((option) => option.targets.length)) continue;
+      const result = solve(tables, scramble, {
+        minDepth: depth, maxDepth: depth, maxNodes: maxNodes - nodes,
+        onProgress: (progress) => onProgress({ depth, nodes: nodes + progress.nodes, count, color: choice.color }),
         onSolution: (solution) => {
-          count++;
+          if (solution.targets.some((target) => acceptTarget(target, choice.color))) count++;
           onSolution({ ...solution, color: choice.color });
         },
       });
       nodes += result.nodes;
     }
+    onDepthComplete({ depth, nodes, count });
     if (count) return { depth, nodes, count };
   }
+  return { depth: null, nodes, count: 0 };
 }
 
 // Functions are reconstructed after IndexedDB structured-clones the graph data.

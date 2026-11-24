@@ -1,12 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Viewer from "./Viewer.jsx";
 import CaseList from "./CaseList.jsx";
+import SolverFilters from "./SolverFilters.jsx";
+import { filteredSolutions, mergeSolutions, categoryDepths, completeSolutionTargets } from "./model/goal-filters.js";
 import Settings from "./Settings.jsx";
 import { SOLVER_SESSION_KEY, SOLVER_MODES, readSession, packSolverSession, unpackSolverSession } from "./session.js";
 import { useSession } from "./use-session.js";
 import { FACES, names, moves, parseScramble } from "./model/fto.js";
 import "./style.css";
+
+const queryKey = (mode, colors) => JSON.stringify([mode, [...colors].sort()]);
+const scrambleKey = (scramble) => scramble.join(",");
 
 function App() {
   const [saved] = useState(() => unpackSolverSession(readSession(SOLVER_SESSION_KEY)));
@@ -21,8 +26,22 @@ function App() {
     mode: "fb",
     setup: false,
   });
-  const [solutions, setSolutions] = useState(saved?.solutions ?? []),
-    [selected, setSelected] = useState(saved?.selected ?? -1),
+  const [filters, setFilters] = useState(saved?.filters ?? {});
+  const [memory, setMemory] = useState(() => {
+    const memory = saved?.memory ?? {
+      scramble: saved?.active.scramble ?? [],
+      queries: saved?.active.setup ? { [queryKey(saved.active.mode, saved.active.colors)]: {
+        records: saved.solutions, depth: saved.status === "done" ? saved.progress.depth : -1,
+        baseDepth: saved.status === "done" ? saved.progress.depth : null,
+      } } : {},
+    };
+    return { ...memory, queries: Object.fromEntries(Object.entries(memory.queries).map(([key, entry]) =>
+      [key, { ...entry, records: completeSolutionTargets(entry.records, JSON.parse(key)[0], memory.scramble) }])) };
+  });
+  const entry = memory.queries[queryKey(active.mode, active.colors)];
+  const solutions = useMemo(() => filteredSolutions(entry?.records ?? [], active.mode, filters[active.mode]),
+    [entry?.records, active.mode, filters]);
+  const [selected, setSelected] = useState(saved?.selected ?? -1),
     [replay, setReplay] = useState(0);
   const [status, setStatus] = useState(saved?.status ?? "idle"),
     [message, setMessage] = useState(saved?.message ?? ""),
@@ -33,7 +52,7 @@ function App() {
     run = useRef(0);
   useEffect(() => () => worker.current?.terminate(), []);
   useSession(SOLVER_SESSION_KEY, {
-    view, text, colors, mode, active, solutions, selected, status, message, progress, page,
+    view, text, colors, mode, active, solutions, selected, status, message, progress, page, filters, memory,
   }, packSolverSession);
   const busy = status === "preparing" || status === "searching";
   function find(e) {
@@ -49,42 +68,55 @@ function App() {
       setMessage(error.message);
       return;
     }
-    if (!worker.current)
-      worker.current = new Worker(
-        new URL("./solver.worker.js", import.meta.url),
-        { type: "module" },
-      );
-    const job = ++run.current;
+    startSearch({ scramble, colors, mode }, false);
+  }
+  function startSearch(request, deeper) {
+    const { scramble, colors, mode } = request,
+      sameScramble = scrambleKey(scramble) === scrambleKey(memory.scramble),
+      key = queryKey(mode, colors),
+      cached = sameScramble ? memory.queries[key] : null,
+      records = cached?.records ?? [];
     setActive({ scramble, colors, mode, setup: true });
-    setSolutions([]);
     setSelected(-1);
     setPage(1);
     setMessage("");
+    if (!sameScramble) setMemory({ scramble, queries: {} });
+    if (!deeper && cached?.baseDepth != null) {
+      setStatus("done"); setProgress({ depth: cached.depth }); return;
+    }
+    if (!worker.current) worker.current = new Worker(
+      new URL("./solver.worker.js", import.meta.url), { type: "module" });
+    const job = ++run.current;
+    const update = (change) => setMemory((old) => ({
+      ...old, queries: { ...old.queries,
+        [key]: change(old.queries[key] ?? { records: [], depth: -1, baseDepth: null }),
+      },
+    }));
     setProgress({});
     setStatus("preparing");
     worker.current.onmessage = ({ data }) => {
       if (job !== run.current) return;
-      if (data.type === "progress") {
-        setStatus("searching");
-        setProgress(data);
-      }
-      if (data.type === "solutions")
-        setSolutions((old) => [...old, ...data.solutions]);
-      if (data.type === "done") {
-        setStatus("done");
-        setProgress(data);
-      }
-      if (data.type === "error") {
-        setStatus("error");
-        setMessage(data.message);
-      }
+      if (data.type === "progress") { setStatus("searching"); setProgress(data); }
+      if (data.type === "solutions") update((old) => ({ ...old, records: mergeSolutions(old.records, data.solutions) }));
+      if (data.type === "depth") update((old) => ({ ...old, depth: Math.max(old.depth, data.depth),
+        baseDepth: old.baseDepth ?? (old.records.length ? Math.min(...old.records.map((s) => s.moves.length)) : null),
+      }));
+      if (data.type === "done") { setStatus("done"); setProgress(data); }
+      if (data.type === "error") { setStatus("error"); setMessage(data.message); }
     };
     worker.current.onerror = (error) => {
       if (job !== run.current) return;
-      setStatus("error");
-      setMessage(error.message || "Solver failed. Try again.");
+      setStatus("error"); setMessage(error.message || "Solver failed. Try again.");
     };
-    worker.current.postMessage({ scramble, colors, mode });
+    worker.current.postMessage({ scramble, colors, mode,
+      filters: deeper ? filters[mode] ?? {} : {},
+      minDepth: deeper ? (cached?.depth ?? -1) + 1 : 0,
+      knownDepths: deeper ? categoryDepths(records, mode) : {},
+    });
+  }
+  function changeFilter(color, field, value) {
+    setFilters((old) => ({ ...old, [mode]: { ...old[mode], [color]: { ...old[mode]?.[color], [field]: value } } }));
+    setSelected(-1); setPage(1);
   }
   function stop() {
     run.current++;
@@ -111,6 +143,7 @@ function App() {
     }
   }
   const pages = Math.ceil(solutions.length / 60);
+  const shownDepth = solutions[0]?.moves.length ?? entry?.depth ?? progress.depth;
   return (
     <>
       <header className="topbar">
@@ -207,6 +240,7 @@ function App() {
                 ))}
               </div>
             </fieldset>
+            <div className="solver-options">
             <label className="mode-label">
               Mode
               <select
@@ -218,6 +252,8 @@ function App() {
                 {SOLVER_MODES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
               </select>
             </label>
+            <SolverFilters mode={mode} colors={colors} filters={filters[mode]} onChange={changeFilter} />
+            </div>
             {busy ? (
               <button
                 type="button"
@@ -250,7 +286,7 @@ function App() {
                 </span>
               ) : status === "done" ? (
                 <span>
-                  {progress.depth} {progress.depth === 1 ? "move" : "moves"} ·{" "}
+                  {shownDepth} {shownDepth === 1 ? "move" : "moves"} ·{" "}
                   {solutions.length}{" "}
                   {solutions.length === 1 ? "solution" : "solutions"}
                 </span>
@@ -263,6 +299,12 @@ function App() {
                 </button>
               )}
             </div>
+            {!busy && active.setup && !solutions.length && entry?.depth >= 0 && (
+              <div className="deeper-prompt" role="status">
+                <span>No matching solution through {entry.depth} {entry.depth === 1 ? "move" : "moves"}.</span>
+                <button type="button" onClick={() => startSearch(active, true)}>Search deeper</button>
+              </div>
+            )}
             <div className="cards">
               {solutions
                 .slice((page - 1) * 60, page * 60)

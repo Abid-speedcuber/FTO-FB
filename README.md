@@ -57,9 +57,15 @@ The virtual FTO supports drag-to-orbit, zoom, automatic card playback, pause, st
 
 The Node tests compare all 72 sticker destinations for all 16 turns against a frozen independent csTimer cubie reference, reproduce the reported scramble and replay every solution through that reference, and check inverse/order-three moves, notation, the complete candidate pool and card-specific piece masks, all colors and all 12 poses, agreement with an independent exhaustive shallow solver (including the complete solution set), and replay of longer-scramble solutions against the original simulator block detector.
 
+## Solver filters
+
+Each selected color has its own filters. Arrow block and FC+1 choose a triplet; FB chooses the excluded triplet. Pseudo modes choose a relative edge-color slot and one of six ordered triplets. For example, Red–Blue means the space between those edges wherever they move, rather than a fixed face or corner. The triplet’s two center colors are listed in the slot’s edge-color order, distinguishing its two orientations. First center has no filters. Face and global orientation remain unrestricted.
+
+Solve first finds the unrestricted optimal depth and immediately applies the chosen filters. If none match, **Search deeper** continues beyond the completed depth. Every completed depth retains all shortest algorithms for every newly reached slot/triplet category, including categories outside the current filter. Categories already solved at a shorter depth are skipped in later depths. Changing filters selects the shortest matching cached results, and repeated searches reuse them. Results across modes and color selections stay cached for the same scramble; solving a different scramble clears this memory. Goal variants satisfied by the same algorithm are retained together, so a solution is never lost just because its first reported formation did not match a filter. Existing PDBs remain admissible for the restricted goal sets.
+
 ## Saved sessions
 
-The current Solver session is saved locally: draft scramble, chosen mode/colors, last searched scramble, solution cards, selected card/result page, and solver status. Reload restores the viewer’s camera, exact playback position (including a paused turn), speed, and back-sticker setting, with playback paused. Goal descriptions are deduplicated in storage to keep result lists compact. A search interrupted by reload retains its partial results and is marked incomplete; press Solve to search again. App view and Case list type/distance/page also persist. These preferences use local storage, separately from the solver’s IndexedDB pruning tables.
+The current Solver session is saved locally: draft scramble, chosen mode/colors, last searched scramble, solution cards, selected card/result page, filter choices, deeper category results, and solver status. Reload restores the viewer’s camera, exact playback position (including a paused turn), speed, and back-sticker setting, with playback paused. Goal descriptions are deduplicated in storage to keep result lists compact. A search interrupted by reload retains its partial results and is marked incomplete; press Solve to search again. App view and Case list type/distance/page also persist. These preferences use local storage, separately from the solver’s IndexedDB pruning tables.
 
 ## Case list
 
