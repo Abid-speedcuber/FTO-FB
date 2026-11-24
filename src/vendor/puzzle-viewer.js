@@ -141,7 +141,6 @@ export class PuzzleViewer {
     this.draw();
   }
   render(motions = []) {
-    // Inspection sheets represent settled faces, so omit them during a turn.
     this.animating = motions.length > 0;
     this.projectionColors = Object.fromEntries(
       FACES.map((f, i) => [f.name, this.colors?.[i] ?? f.color]),
@@ -172,13 +171,14 @@ export class PuzzleViewer {
   }
   draw() {
     if (!this.batching) {
-      this.projection.setVisible(this.showBackStickers && !this.animating);
+      this.projection.setVisible(this.showBackStickers);
       this.projection.render({
         size: this.size,
         state: this.state,
         colors: this.projectionColors,
         camera: this.camera,
         selection: this.selection,
+        animation: this.animating ? this.geometry : null,
       });
       this.renderer.render(this.scene, this.camera);
     }

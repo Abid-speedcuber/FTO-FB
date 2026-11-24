@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { UNDEFINED_COLOR, OUTLINE_COLOR } from "./viewer-colors.js";
-import { FACES, normalOf } from "./puzzle.js";
+import { FACES, normalOf, selected } from "./puzzle.js";
 
 const faceIndices = new Map(
   FACES.map((face, index) => [face.normal.join(","), index]),
@@ -34,7 +34,28 @@ const normals = FACES.map((face) =>
 // Offset the actual rear-face geometry along its outward normal. No screen-space
 // flattening, inverse angle, or chosen hinge: this stays continuous through rolls
 // and pole views, with exactly the same camera and projection as the puzzle.
-export function projectionGeometry(size, state, selection = null) {
+export function projectionGeometry(size, state, selection = null, bands = null) {
+  if (bands) {
+    return bands.flatMap((band, bandIndex) =>
+      FACES.map((_, faceIndex) => {
+        const stickers = state.filter((sticker) =>
+          faceIndices.get(normalOf(sticker).join(",")) === faceIndex &&
+          (bands.length === 1 || selected(sticker, band.move)),
+        );
+        const face = projectionGeometry(size, stickers, selection)[faceIndex];
+        const backing = stickers.flatMap((sticker) =>
+          sticker.vertices.flatMap((vertex) => vertex.map((v) => v * 2 / size)),
+        );
+        return {
+          positions: [...backing, ...face.positions.slice(9)],
+          colors: [...stickers.map(() => -1), ...face.colors.slice(1)],
+          backingCount: backing.length / 3,
+          faceIndex,
+          bandIndex,
+        };
+      }).filter((face) => face.positions.length),
+    );
+  }
   const faces = FACES.map((face) => ({
     positions: face.normal.flatMap((sign, axis) =>
       [0, 1, 2].map((i) => (i === axis ? 2 * sign : 0)),
@@ -115,8 +136,8 @@ export class InspectionProjection {
   setDistances(outward, backward) {
     this.outward = projectionDistance(outward, PROJECTION_OFFSET);
     this.backward = projectionDistance(backward, PROJECTION_BACK_OFFSET);
-    this.meshes.forEach((mesh, index) =>
-      mesh.position.copy(normals[index]).multiplyScalar(this.outward),
+    this.meshes.forEach((mesh) =>
+      mesh.position.copy(normals[mesh.userData.face]).applyQuaternion(mesh.quaternion).multiplyScalar(this.outward),
     );
   }
   setOpacity(value) {
@@ -135,7 +156,8 @@ export class InspectionProjection {
   setVisible(visible) {
     this.root.visible = visible;
   }
-  render({ size, state, colors, camera, selection = null }) {
+  render({ size, state, colors, camera, selection = null, animation = null }) {
+    const bands = animation?.bands ?? null;
     if (!this.root.visible || !this.opacity) return;
     const palette = FACES.map((face) => colors[face.name]),
       key = palette.join(",");
@@ -143,9 +165,11 @@ export class InspectionProjection {
       this.state !== state ||
       this.size !== size ||
       this.paletteKey !== key ||
-      this.selection !== selection
+      this.selection !== selection ||
+      this.bands !== bands
     ) {
       this.state = state;
+      this.bands = bands;
       this.selection = selection;
       this.size = size;
       this.paletteKey = key;
@@ -154,7 +178,9 @@ export class InspectionProjection {
         ...palette.map((color) => new THREE.Color(color)),
         new THREE.Color(UNDEFINED_COLOR),
       ];
-      projectionGeometry(size, state, selection).forEach((face, index) => {
+      this.meshes.forEach((mesh) => { mesh.visible = false; });
+      this.activeMeshes = [];
+      projectionGeometry(size, state, selection, bands).forEach((face, index) => {
         let mesh = this.meshes[index];
         if (!mesh) {
           mesh = new THREE.Mesh(new THREE.BufferGeometry(), [
@@ -168,22 +194,27 @@ export class InspectionProjection {
             }),
             this.backingMaterial,
           ]);
-          mesh.position.copy(normals[index]).multiplyScalar(this.outward);
           mesh.frustumCulled = false;
           mesh.userData.face = index;
           this.meshes[index] = mesh;
           this.root.add(mesh);
         }
+        mesh.userData.face = face.faceIndex ?? index;
+        mesh.userData.band = face.bandIndex;
+        this.activeMeshes.push(mesh);
+        const backingCount = face.backingCount ?? 3;
         const rgb = face.colors.flatMap((color) =>
           Array.from({ length: 3 }, () =>
             paletteRGB[color + 1].toArray(),
           ).flat(),
         );
-        // An inspection state is static between turns; orbiting only updates placement and visibility.
+        // Rebuild buffers only when the state or turn bands change.
         if (
           mesh.geometry.getAttribute("position")?.count !==
-          face.positions.length / 3
+          face.positions.length / 3 ||
+          mesh.userData.backingCount !== backingCount
         ) {
+          mesh.userData.backingCount = backingCount;
           mesh.geometry.dispose();
           mesh.geometry.setAttribute(
             "position",
@@ -196,16 +227,14 @@ export class InspectionProjection {
           // Keep the black outline opaque while the rear sticker ink stays translucent.
           mesh.geometry.setIndex([
             ...Array.from(
-              { length: face.positions.length / 3 - 3 },
-              (_, i) => i + 3,
+              { length: face.positions.length / 3 - backingCount },
+              (_, i) => i + backingCount,
             ),
-            0,
-            1,
-            2,
+            ...Array.from({ length: backingCount }, (_, i) => i),
           ]);
           mesh.geometry.clearGroups();
-          mesh.geometry.addGroup(0, face.positions.length / 3 - 3, 0);
-          mesh.geometry.addGroup(face.positions.length / 3 - 3, 3, 1);
+          mesh.geometry.addGroup(0, face.positions.length / 3 - backingCount, 0);
+          mesh.geometry.addGroup(face.positions.length / 3 - backingCount, backingCount, 1);
         } else {
           mesh.geometry.attributes.position.array.set(face.positions);
           mesh.geometry.attributes.position.needsUpdate = true;
@@ -221,9 +250,15 @@ export class InspectionProjection {
       .normalize()
       .multiplyScalar(-this.backward);
     const position = camera.position.toArray();
-    this.meshes.forEach((mesh, index) => {
+    this.activeMeshes.forEach((mesh) => {
+      const normal = normals[mesh.userData.face].clone();
+      const group = animation?.groups[mesh.userData.band];
+      if (group) mesh.quaternion.copy(group.quaternion);
+      else mesh.quaternion.identity();
+      normal.applyQuaternion(mesh.quaternion);
+      mesh.position.copy(normal).multiplyScalar(this.outward);
       mesh.visible = projectionVisible(
-        normals[index].toArray(),
+        normal.toArray(),
         position,
         this.outward,
         this.backward,

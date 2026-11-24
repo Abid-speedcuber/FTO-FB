@@ -101,3 +101,49 @@ test("rear sheets follow camera orbit and selection-only changes without reveali
   projection.dispose();
   assert.equal(disposed, 8);
 });
+
+test("rear stickers rotate with every move and meet the settled projection exactly", async () => {
+  const { PuzzleMeshes } = await import("../src/vendor/puzzle-meshes.js");
+  const scene = new THREE.Scene(),
+    projection = new InspectionProjection(scene),
+    camera = new THREE.PerspectiveCamera(),
+    materials = FACES.map((face) => new THREE.MeshBasicMaterial({ color: face.color })),
+    puzzle = new PuzzleMeshes(scene, materials, materials[0]),
+    state = solvedState(3),
+    selection = candidateMask(0);
+  camera.position.set(6, 4, 7);
+  projection.setVisible(true);
+  // Compare ink vertices and colors in world space, independent of mesh/band order.
+  const ink = () => projection.activeMeshes.flatMap((mesh) => {
+    const position = mesh.geometry.getAttribute("position"),
+      color = mesh.geometry.getAttribute("color"),
+      start = mesh.userData.backingCount;
+    return Array.from({ length: position.count - start }, (_, i) => {
+      const index = start + i;
+      const point = new THREE.Vector3().fromBufferAttribute(position, index)
+        .applyQuaternion(mesh.quaternion).add(mesh.position);
+      return [...point.toArray(), color.getX(index), color.getY(index), color.getZ(index)]
+        .map((v) => Math.round(v * 1e5) || 0).join(",");
+    });
+  }).sort();
+  for (const move of moves) {
+    puzzle.update(3, state, [move], selection);
+    for (const progress of [0, 0.5, 1]) {
+      puzzle.rotate((band) => band.turns.reduce((angle, turn) =>
+        angle - turn.sign * move.dir * 2 * Math.PI / 3 * progress, 0));
+      projection.render({ size: 3, state, selection, colors, camera, animation: puzzle });
+      assert.equal(ink().length, 72 * 3);
+      assert.ok(projection.activeMeshes.some((mesh) => mesh.visible));
+      for (const mesh of projection.activeMeshes)
+        assert.ok(mesh.quaternion.equals(puzzle.groups[mesh.userData.band].quaternion));
+    }
+    const endpoint = ink();
+    projection.render({ size: 3, state: applyMove(state, move), selection, colors, camera });
+    assert.deepEqual(endpoint, ink());
+    assert.equal(projection.meshes.filter((mesh) => mesh.visible).length,
+      projection.activeMeshes.filter((mesh) => mesh.visible).length);
+  }
+  projection.dispose();
+  puzzle.dispose();
+  materials.forEach((material) => material.dispose());
+});
