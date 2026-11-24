@@ -93,150 +93,169 @@ function App() {
   }
   const pages = Math.ceil(solutions.length / 60);
   return (
-    <main>
-      <form onSubmit={find} className="solver-input">
-        <label htmlFor="scramble">
-          Scramble <small>CIF</small>
-        </label>
-        <textarea
-          id="scramble"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={busy}
-          spellCheck="false"
-          placeholder="Scramble"
-        />
-        <div className="toolbar">
-          <fieldset disabled={busy} aria-label="Block color">
-            <legend>{names[color]}</legend>
-            <div className="colors">
-              {FACES.map((face, i) => (
-                <button
-                  type="button"
-                  key={i}
-                  className={`swatch ${color === i ? "chosen" : ""}`}
-                  style={{ "--color": face.color }}
-                  aria-label={names[i]}
-                  aria-pressed={color === i}
-                  title={names[i]}
-                  onClick={() => setColor(i)}
-                >
-                  {color === i ? "✓" : ""}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <label className="mode-label">
-            Mode
-            <select
-              aria-label="Mode"
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              disabled={busy}
-            >
-              <option value="fb">FB</option>
-              <option value="fc+1">FC+1</option>
-              <option value="arrow">Arrow</option>
-              <option value="pseudo-arrow">Pseudo Arrow</option>
-              <option value="pseudo-fc+1">Pseudo FC+1</option>
-              <option value="fc">First center</option>
-            </select>
+    <>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <img
+            className="brand-logo"
+            src={`${import.meta.env.BASE_URL}logo.svg`}
+            alt=""
+            aria-hidden="true"
+            width="64"
+            height="34"
+          />
+          <h1>
+            First Block<small>by Abid Ibn Ashraf</small>
+          </h1>
+        </div>
+      </header>
+      <main>
+        <form onSubmit={find} className="solver-input">
+          <label htmlFor="scramble">
+            Scramble <small>CIF</small>
           </label>
-          {busy ? (
-            <button
-              type="button"
-              key="stop"
-              className="solve stop"
-              onClick={stop}
-            >
-              Stop
-            </button>
-          ) : (
-            <button key="find" className="solve" type="submit">
-              Solve
-            </button>
-          )}
-        </div>
-      </form>
-      {message && (
-        <p className="error" role="alert">
-          {message}
-        </p>
-      )}
-      <section className="workspace">
-        <div className="results">
-          <div className="results-bar" aria-live="polite">
-            {status === "preparing" ? (
-              <span>Preparing…</span>
-            ) : status === "searching" ? (
-              <span>
-                Depth {progress.depth ?? 0} · {solutions.length} found
-              </span>
-            ) : status === "done" ? (
-              <span>
-                {progress.depth} {progress.depth === 1 ? "move" : "moves"} ·{" "}
-                {solutions.length}{" "}
-                {solutions.length === 1 ? "solution" : "solutions"}
-              </span>
+          <textarea
+            id="scramble"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={busy}
+            spellCheck="false"
+            placeholder="Scramble"
+          />
+          <div className="toolbar">
+            <fieldset disabled={busy} aria-label="Block color">
+              <legend>{names[color]}</legend>
+              <div className="colors">
+                {FACES.map((face, i) => (
+                  <button
+                    type="button"
+                    key={i}
+                    className={`swatch ${color === i ? "chosen" : ""}`}
+                    style={{ "--color": face.color }}
+                    aria-label={names[i]}
+                    aria-pressed={color === i}
+                    title={names[i]}
+                    onClick={() => setColor(i)}
+                  >
+                    {color === i ? "✓" : ""}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label className="mode-label">
+              Mode
+              <select
+                aria-label="Mode"
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+                disabled={busy}
+              >
+                <option value="fb">FB</option>
+                <option value="fc+1">FC+1</option>
+                <option value="arrow">Arrow</option>
+                <option value="pseudo-arrow">Pseudo Arrow</option>
+                <option value="pseudo-fc+1">Pseudo FC+1</option>
+                <option value="fc">First center</option>
+              </select>
+            </label>
+            {busy ? (
+              <button
+                type="button"
+                key="stop"
+                className="solve stop"
+                onClick={stop}
+              >
+                Stop
+              </button>
             ) : (
-              <span />
-            )}
-            {solutions.length > 0 && (
-              <button className="quiet" onClick={copy}>
-                {copied ? "Copied" : "Copy all"}
+              <button key="find" className="solve" type="submit">
+                Solve
               </button>
             )}
           </div>
-          <div className="cards">
-            {solutions.slice((page - 1) * 60, page * 60).map((solution, i) => {
-              const n = (page - 1) * 60 + i;
-              const alg =
-                solution.moves.map((m) => moves[m].name).join(" ") ||
-                "Already complete";
-              return (
-                <button
-                  key={n}
-                  className={`solution-card ${selected === n ? "selected" : ""}`}
-                  aria-label={`Play solution ${n + 1}: ${alg}`}
-                  onClick={() => {
-                    setSelected(n);
-                    setReplay((r) => r + 1);
-                  }}
-                >
-                  <span className="algorithm">{alg}</span>
-                  <span className="length">{solution.moves.length}</span>
+        </form>
+        {message && (
+          <p className="error" role="alert">
+            {message}
+          </p>
+        )}
+        <section className="workspace">
+          <div className="results">
+            <div className="results-bar" aria-live="polite">
+              {status === "preparing" ? (
+                <span>Preparing…</span>
+              ) : status === "searching" ? (
+                <span>
+                  Depth {progress.depth ?? 0} · {solutions.length} found
+                </span>
+              ) : status === "done" ? (
+                <span>
+                  {progress.depth} {progress.depth === 1 ? "move" : "moves"} ·{" "}
+                  {solutions.length}{" "}
+                  {solutions.length === 1 ? "solution" : "solutions"}
+                </span>
+              ) : (
+                <span />
+              )}
+              {solutions.length > 0 && (
+                <button className="quiet" onClick={copy}>
+                  {copied ? "Copied" : "Copy all"}
                 </button>
-              );
-            })}
+              )}
+            </div>
+            <div className="cards">
+              {solutions
+                .slice((page - 1) * 60, page * 60)
+                .map((solution, i) => {
+                  const n = (page - 1) * 60 + i;
+                  const alg =
+                    solution.moves.map((m) => moves[m].name).join(" ") ||
+                    "Already complete";
+                  return (
+                    <button
+                      key={n}
+                      className={`solution-card ${selected === n ? "selected" : ""}`}
+                      aria-label={`Play solution ${n + 1}: ${alg}`}
+                      onClick={() => {
+                        setSelected(n);
+                        setReplay((r) => r + 1);
+                      }}
+                    >
+                      <span className="algorithm">{alg}</span>
+                      <span className="length">{solution.moves.length}</span>
+                    </button>
+                  );
+                })}
+            </div>
+            {pages > 1 && (
+              <nav className="pagination" aria-label="Solution pages">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  {page} / {pages}
+                </span>
+                <button
+                  disabled={page === pages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </button>
+              </nav>
+            )}
           </div>
-          {pages > 1 && (
-            <nav className="pagination" aria-label="Solution pages">
-              <button
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </button>
-              <span>
-                {page} / {pages}
-              </span>
-              <button
-                disabled={page === pages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </button>
-            </nav>
-          )}
-        </div>
-        <Viewer
-          scramble={active.scramble}
-          color={active.color}
-          solution={solutions[selected]}
-          selectionKey={replay}
-        />
-      </section>
-    </main>
+          <Viewer
+            scramble={active.scramble}
+            color={active.color}
+            solution={solutions[selected]}
+            selectionKey={replay}
+          />
+        </section>
+      </main>
+    </>
   );
 }
 createRoot(document.getElementById("root")).render(<App />);
