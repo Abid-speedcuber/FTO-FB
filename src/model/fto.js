@@ -200,8 +200,14 @@ for (let i = 0; i < 72; i++) {
 }
 
 // Include all interchangeable centers of the block's four colors. This fixed
-// 18-piece mask follows identities through moves and is shared by every card.
-export function candidateMask(color) {
+// 18-piece mask follows identities through moves and is shared by every card
+// of that color. First center needs only its three edges and three centers.
+export function candidateMask(color, mode = "fb") {
+  if (mode === "fc") {
+    return new Set(physicalGroups()
+      .filter((piece) => piece.length <= 2 && piece.some((id) => solved[id].color === color))
+      .flat());
+  }
   const bases = goalsFor(color).filter((v) =>
     v.first.every(([p, c]) => solved[p].color === c),
   );

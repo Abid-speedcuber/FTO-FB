@@ -76,3 +76,19 @@ test("18-piece mask includes nine other-orbit centers and three block-color cent
     assert.equal(groups.filter((g) => g.length === 4).length, 3);
   }
 });
+
+test("First center defines exactly its three edges and three centers for every color", () => {
+  for (let color = 0; color < 8; color++) {
+    const mask = candidateMask(color, "fc");
+    const groups = physicalGroups().filter((piece) => piece.some((id) => mask.has(id)));
+    assert.equal(mask.size, 9);
+    assert.equal(groups.length, 6);
+    assert.equal(groups.filter((piece) => piece.length === 1).length, 3);
+    assert.equal(groups.filter((piece) => piece.length === 2).length, 3);
+    assert.ok(groups.every((piece) => piece.every((id) => mask.has(id))));
+    assert.ok(groups.every((piece) => piece.some((id) => solved[id].color === color)));
+    assert.ok([...mask].every((id) => candidateMask(color).has(id)));
+    const solvedGoal = matchingGoal(stickerPositions([]), color, "fc");
+    assert.ok(solvedGoal.first.every(([slot]) => mask.has(slot)));
+  }
+});

@@ -3,31 +3,38 @@ import { createRoot } from "react-dom/client";
 import Viewer from "./Viewer.jsx";
 import CaseList from "./CaseList.jsx";
 import Settings from "./Settings.jsx";
+import { SOLVER_SESSION_KEY, SOLVER_MODES, readSession, packSolverSession, unpackSolverSession } from "./session.js";
+import { useSession } from "./use-session.js";
 import { FACES, names, moves, parseScramble } from "./model/fto.js";
 import "./style.css";
 
 function App() {
-  const [view, setView] = useState("solver"),
-    [casesOpened, setCasesOpened] = useState(false);
-  const [text, setText] = useState("");
-  const [colors, setColors] = useState([0]),
-    [mode, setMode] = useState("fb");
-  const [active, setActive] = useState({
+  const [saved] = useState(() => unpackSolverSession(readSession(SOLVER_SESSION_KEY)));
+  const [view, setView] = useState(saved?.view ?? "solver"),
+    [casesOpened, setCasesOpened] = useState(saved?.view === "cases");
+  const [text, setText] = useState(saved?.text ?? "");
+  const [colors, setColors] = useState(saved?.colors ?? [0]),
+    [mode, setMode] = useState(saved?.mode ?? "fb");
+  const [active, setActive] = useState(saved?.active ?? {
     scramble: [],
     colors: [0],
     mode: "fb",
+    setup: false,
   });
-  const [solutions, setSolutions] = useState([]),
-    [selected, setSelected] = useState(-1),
+  const [solutions, setSolutions] = useState(saved?.solutions ?? []),
+    [selected, setSelected] = useState(saved?.selected ?? -1),
     [replay, setReplay] = useState(0);
-  const [status, setStatus] = useState("idle"),
-    [message, setMessage] = useState(""),
-    [progress, setProgress] = useState({});
-  const [page, setPage] = useState(1),
+  const [status, setStatus] = useState(saved?.status ?? "idle"),
+    [message, setMessage] = useState(saved?.message ?? ""),
+    [progress, setProgress] = useState(saved?.progress ?? {});
+  const [page, setPage] = useState(saved?.page ?? 1),
     [copied, setCopied] = useState(false);
   const worker = useRef(),
     run = useRef(0);
   useEffect(() => () => worker.current?.terminate(), []);
+  useSession(SOLVER_SESSION_KEY, {
+    view, text, colors, mode, active, solutions, selected, status, message, progress, page,
+  }, packSolverSession);
   const busy = status === "preparing" || status === "searching";
   function find(e) {
     e.preventDefault();
@@ -48,7 +55,7 @@ function App() {
         { type: "module" },
       );
     const job = ++run.current;
-    setActive({ scramble, colors, mode });
+    setActive({ scramble, colors, mode, setup: true });
     setSolutions([]);
     setSelected(-1);
     setPage(1);
@@ -208,12 +215,7 @@ function App() {
                 onChange={(e) => setMode(e.target.value)}
                 disabled={busy}
               >
-                <option value="fb">FB</option>
-                <option value="fc+1">FC+1</option>
-                <option value="arrow">Arrow</option>
-                <option value="pseudo-arrow">Pseudo Arrow</option>
-                <option value="pseudo-fc+1">Pseudo FC+1</option>
-                <option value="fc">First center</option>
+                {SOLVER_MODES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
               </select>
             </label>
             {busy ? (
@@ -316,6 +318,9 @@ function App() {
           <Viewer
             active={view === "solver"}
             scramble={active.scramble}
+            colors={active.colors}
+            mode={active.mode}
+            setup={active.setup}
             solution={solutions[selected]}
             selectionKey={replay}
           />

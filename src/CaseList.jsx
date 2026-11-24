@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CASE_SESSION_KEY, readSession } from "./session.js";
+import { useSession } from "./use-session.js";
 import { PuzzleViewer } from "./vendor/puzzle-viewer.js";
 import { moves, parseScramble } from "./model/fto.js";
 import {
@@ -239,9 +241,10 @@ function CaseCard({
   );
 }
 export default function CaseList({ visible }) {
-  const [mode, setMode] = useState("arrow"),
-    [depth, setDepth] = useState(1),
-    [page, setPage] = useState(1),
+  const [saved] = useState(() => readSession(CASE_SESSION_KEY));
+  const [mode, setMode] = useState(CASE_MODES.some((m) => m.id === saved?.mode) ? saved.mode : "arrow"),
+    [depth, setDepth] = useState([1, 2, 3, 4].includes(saved?.depth) ? saved.depth : 1),
+    [page, setPage] = useState(Number.isInteger(saved?.page) && saved.page > 0 ? saved.page : 1),
     [manifest, setManifest] = useState(null),
     [cases, setCases] = useState([]),
     [loading, setLoading] = useState(true),
@@ -249,6 +252,7 @@ export default function CaseList({ visible }) {
     [active, setActive] = useState({ key: "", playSignal: 0 });
   const pool = useMemo(() => new CaseSnapshots(), []),
     playCounter = useRef(0);
+  useSession(CASE_SESSION_KEY, { mode, depth, page });
   useEffect(() => () => pool.dispose(), [pool]);
   useEffect(() => {
     const controller = new AbortController();
@@ -294,6 +298,7 @@ export default function CaseList({ visible }) {
         )
           throw new Error("Invalid case file");
         setCases(data);
+        setPage((old) => Math.min(old, Math.max(1, Math.ceil(data.length / 40))));
         setLoading(false);
       })
       .catch((e) => {

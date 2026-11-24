@@ -28,7 +28,7 @@ The first block uses the exact `builtinPatterns()` definition from the neighbori
 
 **Pseudo Arrow** and **Pseudo FC+1** use the same attachment shapes as Arrow and FC+1. At each slot, any of the three triplets containing the selected color may be placed in either orientation: six possibilities. Each triplet must remain internally formed (its two centers match its corner), but it need not match the surrounding first-center pieces. All three slots and all 12 orbit poses are searched together.
 
-A finished block has 12 physical pieces (21 stickers). In Solver, the viewer defines all **18 relevant physical pieces (30 stickers)** for the selected card’s color: three corners, three edges, three block-color centers, and nine centers from the other orbit. These identities stay visible throughout playback, including pieces outside the solved target. Other pieces remain dark gray with pitch-black outlines. No pieces are defined until a card is selected. Case-list previews define only their pattern’s pieces. The initial and reset camera use the simulator’s CIF hold.
+A finished block has 12 physical pieces (21 stickers). In Solver, the viewer defines all **18 relevant physical pieces (30 stickers)** for the selected card’s color: three corners, three edges, three block-color centers, and nine centers from the other orbit. These identities stay visible throughout playback, including pieces outside the solved target. Other pieces remain dark gray with pitch-black outlines. Pressing Solve immediately displays the scramble with the relevant pieces for all searched colors. Selecting a card narrows visibility to that card’s color. First center mode defines only its six relevant pieces (three edges and three centers, nine stickers), both before card selection and throughout playback. Case-list previews define only their pattern’s pieces. The initial and reset camera use the simulator’s CIF hold.
 
 Both directions of the 120° turns on U, R, F, L, B, D, BR, and BL cost one move. Scramble input, printed solutions, playback all use conventional **CIF/csTimer notation**, mapped explicitly to the simulator’s internal geometric faces. Scramble notation accepts whitespace-separated face turns, case-insensitively, with a prime (straight or curly) or `2` for the inverse direction. Rotations, wide turns, comments, and nested algorithm notation are not accepted. An empty scramble is the solved puzzle.
 
@@ -56,6 +56,10 @@ The virtual FTO supports drag-to-orbit, zoom, automatic card playback, pause, st
 ## Validation
 
 The Node tests compare all 72 sticker destinations for all 16 turns against a frozen independent csTimer cubie reference, reproduce the reported scramble and replay every solution through that reference, and check inverse/order-three moves, notation, the complete candidate pool and card-specific piece masks, all colors and all 12 poses, agreement with an independent exhaustive shallow solver (including the complete solution set), and replay of longer-scramble solutions against the original simulator block detector.
+
+## Saved sessions
+
+The current Solver session is saved locally: draft scramble, chosen mode/colors, last searched scramble, solution cards, selected card/result page, and solver status. Reload restores the viewer’s camera, exact playback position (including a paused turn), speed, and back-sticker setting, with playback paused. Goal descriptions are deduplicated in storage to keep result lists compact. A search interrupted by reload retains its partial results and is marked incomplete; press Solve to search again. App view and Case list type/distance/page also persist. These preferences use local storage, separately from the solver’s IndexedDB pruning tables.
 
 ## Case list
 

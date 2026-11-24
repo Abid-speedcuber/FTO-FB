@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { readSession, writeSession, VIEWER_SESSION_KEY } from "./session.js";
 import { PuzzleViewer } from "./vendor/puzzle-viewer.js";
 import {
   solvedState,
@@ -9,10 +10,14 @@ import {
 } from "./model/fto.js";
 export default function Viewer({
   scramble,
+  colors,
+  mode,
+  setup,
   solution,
   selectionKey,
   active = true,
 }) {
+  const [saved] = useState(() => readSession(VIEWER_SESSION_KEY));
   const host = useRef(),
     viewer = useRef(),
     frames = useRef([]),
@@ -21,31 +26,61 @@ export default function Viewer({
     playing = useRef(false);
   const [step, setStep] = useState(0),
     [isPlaying, setPlaying] = useState(false),
-    [speed, setSpeed] = useState(500),
+    [speed, setSpeed] = useState([250, 500, 900].includes(saved?.speed) ? saved.speed : 500),
     [error, setError] = useState(""),
-    [backStickers, setBackStickers] = useState(true);
+    [backStickers, setBackStickers] = useState(saved?.backStickers !== false);
   const mask = useRef(),
-    homeView = useRef();
+    homeView = useRef(),
+    firstFrame = useRef(true),
+    context = useRef(null),
+    turnProgress = useRef(0),
+    saveTimer = useRef(),
+    saveLatest = useRef();
+  saveLatest.current = () => {
+    if (!context.current || !viewer.current) return;
+    writeSession(VIEWER_SESSION_KEY, {
+      signature: context.current, step: index.current, progress: turnProgress.current,
+      camera: viewer.current.view(), speed, backStickers,
+    });
+  };
+  const scheduleSave = () => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => saveLatest.current(), 150);
+  };
   const halt = () => {
     cancelAnimationFrame(raf.current);
     playing.current = false;
     setPlaying(false);
+    scheduleSave();
   };
   const show = (i) => {
     halt();
     index.current = i;
+    turnProgress.current = 0;
     setStep(i);
     viewer.current?.setPuzzle(3, frames.current[i], mask.current);
   };
   useEffect(() => {
     try {
-      viewer.current = new PuzzleViewer(host.current);
+      viewer.current = new PuzzleViewer(host.current, { showBackStickers: backStickers });
       viewer.current.resize();
       homeView.current = viewer.current.view();
+      if (Array.isArray(saved?.camera?.rotation) && saved.camera.rotation.length === 4 &&
+          saved.camera.rotation.every(Number.isFinite) && saved.camera.rotation.some((v) => v !== 0) &&
+          saved.camera.radius >= 6 && saved.camera.radius <= 20) viewer.current.setView(saved.camera);
+      viewer.current.controls.addEventListener("change", scheduleSave);
     } catch (e) {
       setError(`3D viewer unavailable: ${e.message}`);
     }
+    const flush = () => saveLatest.current();
+    const hide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hide);
     return () => {
+      flush();
+      clearTimeout(saveTimer.current);
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", hide);
       cancelAnimationFrame(raf.current);
       viewer.current?.dispose();
     };
@@ -59,20 +94,33 @@ export default function Viewer({
       state = applyMove(state, moves[m]);
       frames.current.push(state);
     }
-    mask.current = solution ? candidateMask(solution.color) : new Set();
-    index.current = 0;
-    setStep(0);
-    viewer.current?.setPuzzle(3, frames.current[0], mask.current);
-    if (solution) raf.current = requestAnimationFrame(() => play());
-  }, [scramble, solution, selectionKey]);
+    const visibleColors = solution ? [solution.color] : setup ? colors : [];
+    mask.current = new Set(visibleColors.flatMap((color) => [...candidateMask(color, mode)]));
+    const signature = JSON.stringify([scramble, colors, mode, setup, solution?.moves, solution?.color]);
+    const restoring = firstFrame.current && saved?.signature === signature;
+    const restoredStep = restoring && Number.isInteger(saved.step)
+      ? Math.max(0, Math.min(saved.step, frames.current.length - 1)) : 0;
+    index.current = restoredStep;
+    turnProgress.current = restoring && restoredStep < (solution?.moves.length ?? 0) &&
+      Number.isFinite(saved.progress) ? Math.max(0, Math.min(saved.progress, 1)) : 0;
+    context.current = signature;
+    setStep(restoredStep);
+    viewer.current?.setPuzzle(3, frames.current[restoredStep], mask.current,
+      turnProgress.current ? [{ move: moves[solution.moves[restoredStep]], progress: turnProgress.current }] : []);
+    if (solution && !firstFrame.current && active) raf.current = requestAnimationFrame(() => play());
+    firstFrame.current = false;
+    scheduleSave();
+  }, [scramble, colors, mode, setup, solution, selectionKey]);
   useEffect(() => {
     if (!active) halt();
   }, [active]);
+  useEffect(scheduleSave, [speed, backStickers]);
   function play() {
     if (!solution?.moves.length) return;
     halt();
     if (index.current >= solution.moves.length) {
       index.current = 0;
+      turnProgress.current = 0;
       setStep(0);
     }
     playing.current = true;
@@ -80,14 +128,17 @@ export default function Viewer({
     let started;
     function tick(time) {
       if (!playing.current) return;
-      if (started === undefined) started = time;
+      if (started === undefined) started = time - turnProgress.current * speed;
       const p = Math.max(0, Math.min(1, (time - started) / speed)),
         i = index.current;
+      turnProgress.current = p;
+      scheduleSave();
       viewer.current?.setPuzzle(3, frames.current[i], mask.current, [
         { move: moves[solution.moves[i]], progress: p },
       ]);
       if (p === 1) {
         index.current++;
+        turnProgress.current = 0;
         setStep(index.current);
         viewer.current?.setPuzzle(
           3,
