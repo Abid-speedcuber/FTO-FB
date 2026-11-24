@@ -8,7 +8,12 @@ import {
   stickerPositions,
   FACES,
 } from "./model/fto.js";
-export default function Viewer({ scramble, solution, selectionKey }) {
+export default function Viewer({
+  scramble,
+  solution,
+  selectionKey,
+  active = true,
+}) {
   const host = useRef(),
     viewer = useRef(),
     frames = useRef([]),
@@ -64,6 +69,9 @@ export default function Viewer({ scramble, solution, selectionKey }) {
     viewer.current?.setPuzzle(3, frames.current[0], mask.current);
     if (solution) raf.current = requestAnimationFrame(() => play());
   }, [scramble, solution, selectionKey]);
+  useEffect(() => {
+    if (!active) halt();
+  }, [active]);
   function play() {
     if (!solution?.moves.length) return;
     halt();

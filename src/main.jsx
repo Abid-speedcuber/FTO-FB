@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Viewer from "./Viewer.jsx";
+import CaseList from "./CaseList.jsx";
 import { FACES, names, moves, parseScramble } from "./model/fto.js";
 import "./style.css";
 
 function App() {
+  const [view, setView] = useState("solver"),
+    [casesOpened, setCasesOpened] = useState(false);
   const [text, setText] = useState("");
   const [colors, setColors] = useState([0]),
     [mode, setMode] = useState("fb");
@@ -115,9 +118,21 @@ function App() {
           <h1>
             First Block<small>by Abid Ibn Ashraf</small>
           </h1>
+          <select
+            className="app-view"
+            aria-label="App view"
+            value={view}
+            onChange={(e) => {
+              setView(e.target.value);
+              if (e.target.value === "cases") setCasesOpened(true);
+            }}
+          >
+            <option value="solver">Solver</option>
+            <option value="cases">Case list</option>
+          </select>
         </div>
       </header>
-      <main>
+      <main hidden={view !== "solver"}>
         <form onSubmit={find} className="solver-input">
           <label htmlFor="scramble">
             Scramble <small>CIF</small>
@@ -297,12 +312,14 @@ function App() {
             )}
           </div>
           <Viewer
+            active={view === "solver"}
             scramble={active.scramble}
             solution={solutions[selected]}
             selectionKey={replay}
           />
         </section>
       </main>
+      {casesOpened && <CaseList visible={view === "cases"} />}
     </>
   );
 }
