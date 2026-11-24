@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { readSession, writeSession, VIEWER_SESSION_KEY } from "./session.js";
+import { DEFAULT_CIF_FRAME, frameForCamera, snappedViewRotation } from "./vendor/orientation.js";
+import { moveNamesForFrame } from "./view-notation.js";
 import { PuzzleViewer } from "./vendor/puzzle-viewer.js";
 import {
   solvedState,
   applyMove,
   moves,
   candidateMask,
-  FACES,
 } from "./model/fto.js";
 export default function Viewer({
   scramble,
@@ -16,7 +17,15 @@ export default function Viewer({
   solution,
   selectionKey,
   active = true,
+  onFrameChange,
+  onViewInteraction,
+  viewRequest,
 }) {
+  const [frame, setFrame] = useState(DEFAULT_CIF_FRAME);
+  const frameCallback = useRef(), interactionCallback = useRef(), applyingHold = useRef(false);
+  frameCallback.current = onFrameChange;
+  interactionCallback.current = onViewInteraction;
+  const moveNames = moveNamesForFrame(frame);
   const [saved] = useState(() => readSession(VIEWER_SESSION_KEY));
   const host = useRef(),
     viewer = useRef(),
@@ -68,7 +77,15 @@ export default function Viewer({
       if (Array.isArray(saved?.camera?.rotation) && saved.camera.rotation.length === 4 &&
           saved.camera.rotation.every(Number.isFinite) && saved.camera.rotation.some((v) => v !== 0) &&
           saved.camera.radius >= 6 && saved.camera.radius <= 20) viewer.current.setView(saved.camera);
-      viewer.current.controls.addEventListener("change", scheduleSave);
+      const updateFrame = () => {
+        const next = frameForCamera(viewer.current.camera);
+        setFrame(next);
+        frameCallback.current?.(next);
+        if (!applyingHold.current) interactionCallback.current?.(next);
+        scheduleSave();
+      };
+      viewer.current.controls.addEventListener("change", updateFrame);
+      updateFrame();
     } catch (e) {
       setError(`3D viewer unavailable: ${e.message}`);
     }
@@ -115,6 +132,15 @@ export default function Viewer({
     if (!active) halt();
   }, [active]);
   useEffect(scheduleSave, [speed, backStickers]);
+  useEffect(() => {
+    if (!viewRequest || !viewer.current) return;
+    applyingHold.current = true;
+    try {
+      viewer.current.setView({
+        ...viewer.current.view(), rotation: snappedViewRotation(viewRequest.frame).toArray(),
+      });
+    } finally { applyingHold.current = false; }
+  }, [viewRequest]);
   function play() {
     if (!solution?.moves.length) return;
     halt();
@@ -172,26 +198,9 @@ export default function Viewer({
         <div className="view-actions">
           <button
             className="quiet"
-            disabled={!solution}
-            onClick={() =>
-              viewer.current?.face(
-                FACES[
-                  Math.floor(
-                    solution.target.first.find(
-                      ([, c]) => c === solution.color,
-                    )[0] / 9,
-                  )
-                ].normal,
-              )
-            }
-          >
-            View block
-          </button>
-          <button
-            className="quiet"
             onClick={() => viewer.current?.setView(homeView.current)}
           >
-            CIF
+            Reset View
           </button>
         </div>
       </div>
@@ -206,7 +215,7 @@ export default function Viewer({
                 onClick={() => show(i + 1)}
                 className={i < step ? "played" : i === step ? "next" : ""}
               >
-                {moves[m].name}
+                {moveNames[m]}
               </button>
             ))
           ) : (

@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CASE_SESSION_KEY, readSession } from "./session.js";
 import { useSession } from "./use-session.js";
+import { DEFAULT_CIF_FRAME, frameForCamera } from "./vendor/orientation.js";
+import { formatAlgorithm } from "./view-notation.js";
 import { PuzzleViewer } from "./vendor/puzzle-viewer.js";
 import { moves, parseScramble } from "./model/fto.js";
 import {
   CASE_MODES,
   caseFrames,
   mirrorAlgorithm,
-  algorithmText,
   partialTarget,
   partialKey,
   applyPartial,
@@ -15,13 +16,16 @@ import {
 } from "./model/cases.js";
 import { CaseSnapshots, CASE_CAMERA_RADIUS } from "./case-snapshots.js";
 
-function CasePlayer({ target, solution, playSignal, action, onPlaying, onStep, visible }) {
+function CasePlayer({ target, solution, playSignal, action, onPlaying, onStep, onFrameChange, visible }) {
   const host = useRef(),
     viewer = useRef(),
     raf = useRef(),
     index = useRef(0),
     playing = useRef(false),
-    inTurn = useRef(false);
+    inTurn = useRef(false),
+    cameraView = useRef(null),
+    frameCallback = useRef();
+  frameCallback.current = onFrameChange;
   const parts = useMemo(() => caseFrames(target, solution), [target, solution]);
   function pause() {
     cancelAnimationFrame(raf.current);
@@ -72,15 +76,18 @@ function CasePlayer({ target, solution, playSignal, action, onPlaying, onStep, v
     try {
       viewer.current = new PuzzleViewer(host.current, { fitToView: true });
       viewer.current.resize();
-      viewer.current.setFrame(3, parts.frames[0], parts.mask, [], {
-        ...viewer.current.view(),
-        radius: CASE_CAMERA_RADIUS,
+      viewer.current.setFrame(3, parts.frames[0], parts.mask, [], cameraView.current ?? {
+        ...viewer.current.view(), radius: CASE_CAMERA_RADIUS,
       });
+      const updateFrame = () => frameCallback.current?.(frameForCamera(viewer.current.camera));
+      viewer.current.controls.addEventListener("change", updateFrame);
+      updateFrame();
     } catch (error) {
       host.current.textContent = "3D preview unavailable";
     }
     return () => {
       pause();
+      if (viewer.current) cameraView.current = viewer.current.view();
       viewer.current?.dispose();
       viewer.current = null;
     };
@@ -123,7 +130,8 @@ function CaseCard({
     [playing, setPlaying] = useState(false),
     [step, setStep] = useState(0),
     [turning, setTurning] = useState(false),
-    [selectedSolution, setSelectedSolution] = useState(0);
+    [selectedSolution, setSelectedSolution] = useState(0),
+    [frame, setFrame] = useState(DEFAULT_CIF_FRAME);
   const solutions = useMemo(() => entry.solutions.map((text) => {
     const algorithm = parseScramble(text);
     return mirrored ? mirrorAlgorithm(algorithm) : algorithm;
@@ -164,6 +172,7 @@ function CaseCard({
     };
   }, [near, pool, snapshotKey, target, solution]);
   const focused = active.key === key;
+  const displayFrame = focused ? frame : DEFAULT_CIF_FRAME;
   return (
     <article
       ref={article}
@@ -180,13 +189,13 @@ function CaseCard({
         {entry.name && <h2>{entry.name}</h2>}
         <div className="case-solutions">
           {solutions.length === 1 ? (
-            <div className="case-algorithm">{algorithmText(solution)}</div>
+            <div className="case-algorithm">{formatAlgorithm(solution, displayFrame)}</div>
           ) : solutions.map((algorithm, i) => (
             <button type="button" key={i} className="case-alternative case-algorithm"
               aria-pressed={selectedSolution === i}
-              aria-label={`Solution ${i + 1}: ${algorithmText(algorithm)}`}
+              aria-label={`Solution ${i + 1}: ${formatAlgorithm(algorithm, displayFrame)}`}
               onClick={() => { setSelectedSolution(i); activate(key, false); }}>
-              {algorithmText(algorithm)}
+              {formatAlgorithm(algorithm, displayFrame)}
             </button>
           ))}
         </div>
@@ -228,6 +237,7 @@ function CaseCard({
             playSignal={active.playSignal}
             action={active.action}
             onPlaying={setPlaying}
+            onFrameChange={setFrame}
             onStep={(next, partial = false) => { setStep(next); setTurning(partial); }}
             visible={visible}
           />

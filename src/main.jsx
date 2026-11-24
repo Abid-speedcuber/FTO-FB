@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { DEFAULT_CIF_FRAME } from "./vendor/orientation.js";
+import { formatAlgorithm } from "./view-notation.js";
+import HoldInput from "./HoldInput.jsx";
 import Viewer from "./Viewer.jsx";
 import CaseList from "./CaseList.jsx";
 import SolverFilters from "./SolverFilters.jsx";
@@ -7,13 +10,16 @@ import { filteredSolutions, mergeSolutions, categoryDepths, completeSolutionTarg
 import Settings from "./Settings.jsx";
 import { SOLVER_SESSION_KEY, SOLVER_MODES, readSession, packSolverSession, unpackSolverSession } from "./session.js";
 import { useSession } from "./use-session.js";
-import { FACES, names, moves, parseScramble } from "./model/fto.js";
+import { FACES, names, parseScramble } from "./model/fto.js";
 import "./style.css";
 
 const queryKey = (mode, colors) => JSON.stringify([mode, [...colors].sort()]);
 const scrambleKey = (scramble) => scramble.join(",");
 
 function App() {
+  const holdInput = useRef();
+  const [frame, setFrame] = useState(DEFAULT_CIF_FRAME);
+  const [viewRequest, setViewRequest] = useState(null);
   const [saved] = useState(() => unpackSolverSession(readSession(SOLVER_SESSION_KEY)));
   const [view, setView] = useState(saved?.view ?? "solver"),
     [casesOpened, setCasesOpened] = useState(saved?.view === "cases");
@@ -131,7 +137,7 @@ function App() {
         solutions
           .map(
             (s) =>
-              s.moves.map((m) => moves[m].name).join(" ") ||
+              formatAlgorithm(s.moves, frame) ||
               "(already complete)",
           )
           .join("\n"),
@@ -177,7 +183,7 @@ function App() {
       <main hidden={view !== "solver"}>
         <form onSubmit={find} className="solver-input">
           <label htmlFor="scramble">
-            Scramble <small>CIF</small>
+            Scramble
           </label>
           <input
             type="text"
@@ -277,7 +283,9 @@ function App() {
         )}
         <section className="workspace">
           <div className="results">
-            <div className="results-bar" aria-live="polite">
+            <div className="results-bar">
+              <div className="results-summary">
+              <span aria-live="polite">
               {status === "preparing" ? (
                 <span>Preparing…</span>
               ) : status === "searching" ? (
@@ -293,12 +301,19 @@ function App() {
               ) : (
                 <span />
               )}
+              </span>
+              <HoldInput ref={holdInput} frame={frame} onCommit={(hold) => setViewRequest({ frame: hold })} />
+              </div>
               {solutions.length > 0 && (
                 <button className="quiet" onClick={copy}>
                   {copied ? "Copied" : "Copy all"}
                 </button>
               )}
             </div>
+            {active.setup && <div className="active-scramble">
+              <span>Scramble</span>
+              <code>{formatAlgorithm(active.scramble) || "Solved state"}</code>
+            </div>}
             {!busy && active.setup && !solutions.length && entry?.depth >= 0 && (
               <div className="deeper-prompt" role="status">
                 <span>No matching solution through {entry.depth} {entry.depth === 1 ? "move" : "moves"}.</span>
@@ -311,7 +326,7 @@ function App() {
                 .map((solution, i) => {
                   const n = (page - 1) * 60 + i;
                   const alg =
-                    solution.moves.map((m) => moves[m].name).join(" ") ||
+                    formatAlgorithm(solution.moves, frame) ||
                     "Already complete";
                   return (
                     <button
@@ -359,6 +374,9 @@ function App() {
           </div>
           <Viewer
             active={view === "solver"}
+            onFrameChange={setFrame}
+            onViewInteraction={(hold) => holdInput.current?.follow(hold)}
+            viewRequest={viewRequest}
             scramble={active.scramble}
             colors={active.colors}
             mode={active.mode}
