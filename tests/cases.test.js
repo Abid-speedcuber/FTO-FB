@@ -21,6 +21,8 @@ import {
   shorterDistances,
   preserveCaseEdits,
   generateCases,
+  groupCases,
+  commutingKey,
 } from "../scripts/generate-cases.mjs";
 const definitions = caseDefinitions();
 const manifest = JSON.parse(
@@ -85,69 +87,62 @@ test("mirror substitution matches the requested move pairs and is reversible", (
     assert.equal(mirrorAlgorithm([m ^ 1])[0], mirrorAlgorithm([m])[0] ^ 1);
   }
 });
-test("every precalculated entry is minimal, uses an allowed last move, and stores no mirror twice", async () => {
+test("catalog groups identical patterns and keeps only noncommuting shortest alternatives", async () => {
   let alternateCount = 0;
   for (const [mode, definition] of Object.entries(definitions)) {
     const target = partialTarget(definition.target),
       shorter = shorterDistances(definition.target, 3, definition.goals),
       allowed = new Set(definition.firstMoves);
     for (let depth = 1; depth <= 4; depth++) {
-      const text = await readFile(
-          new URL(`../public/cases/${mode}/${depth}.json`, import.meta.url),
-          "utf8",
-        ),
-        records = JSON.parse(text);
+      const records = JSON.parse(await readFile(
+        new URL(`../public/cases/${mode}/${depth}.json`, import.meta.url), "utf8"));
       assert.equal(records.length, manifest.modes[mode].counts[depth]);
-      const algorithms = new Set(records.map((r) => r.solution)),
-        ids = new Set(),
-        seenStates = new Set();
+      const ids = new Set(), seenStates = new Set();
       for (const entry of records) {
         assert.equal(typeof entry.name, "string");
-        assert.ok(!ids.has(entry.id));
-        ids.add(entry.id);
-        const solution = parseScramble(entry.solution),
-          setup = inverseAlgorithm(solution);
-        assert.equal(solution.length, depth);
-        assert.ok(allowed.has(setup[0]));
-        const state = applyPartial(target, setup),
-          key = partialKey(state);
-        assert.ok((shorter.get(key) ?? Infinity) >= depth);
-        assert.equal(
-          partialKey(applyPartial(state, solution)),
-          partialKey(target),
-        );
-        if (seenStates.has(key)) alternateCount++;
+        assert.ok(!ids.has(entry.id)); ids.add(entry.id);
+        assert.ok(entry.solutions.length);
+        const state = applyPartial(target, inverseAlgorithm(parseScramble(entry.solutions[0]))),
+          key = partialKey(state), equivalences = new Set();
+        assert.ok(!seenStates.has(key), "one card per pattern, including its mirror");
         seenStates.add(key);
-        if (definition.mirrors) {
-          const mirror = mirrorAlgorithm(solution),
-            name = mirror.map((m) => moves[m].name).join(" ");
-          assert.ok(!algorithms.has(name));
-          assert.ok(
-            (shorter.get(
-              partialKey(applyPartial(target, inverseAlgorithm(mirror))),
-            ) ?? Infinity) >= depth,
-          );
+        assert.ok((shorter.get(key) ?? Infinity) >= depth);
+        for (const text of entry.solutions) {
+          const solution = parseScramble(text), setup = inverseAlgorithm(solution);
+          assert.equal(solution.length, depth);
+          assert.ok(allowed.has(setup[0]));
+          assert.equal(partialKey(applyPartial(target, setup)), key);
+          assert.equal(partialKey(applyPartial(state, solution)), partialKey(target));
+          const equivalence = commutingKey(state, solution);
+          assert.ok(!equivalences.has(equivalence), "commuting alternatives are collapsed");
+          equivalences.add(equivalence);
+          if (definition.mirrors) {
+            const mirrorState = applyPartial(target, inverseAlgorithm(mirrorAlgorithm(solution))),
+              mirrorKey = partialKey(mirrorState);
+            assert.ok((shorter.get(mirrorKey) ?? Infinity) >= depth);
+            if (mirrorKey !== key) {
+              // Multiple alternatives must produce the same derived mirror card.
+              if (text === entry.solutions[0]) {
+                assert.ok(!seenStates.has(mirrorKey)); seenStates.add(mirrorKey);
+              } else assert.ok(seenStates.has(mirrorKey));
+            }
+          }
         }
+        alternateCount += entry.solutions.length - 1;
       }
-      // White-center labels never enter the state representation; equal colors
-      // stay equal and undefined pieces cannot acquire a visible color.
-      for (const entry of [records[0], records.at(-1)])
-        if (entry) {
-          const solution = parseScramble(entry.solution),
-            { frames, mask } = caseFrames(definition.target, solution);
-          const slots = new Map(solved.map((s) => [slotKey(s.vertices), s.id]));
-          const end = new Uint8Array(72);
-          for (const sticker of frames.at(-1))
-            if (mask.has(sticker.id))
-              end[slots.get(slotKey(sticker.vertices))] = sticker.color + 1;
+      // Sample actual animated frames, including each retained alternative.
+      for (const entry of [records[0], records.at(-1)]) if (entry)
+        for (const text of entry.solutions) {
+          const { frames, mask } = caseFrames(definition.target, parseScramble(text)),
+            slots = new Map(solved.map((s) => [slotKey(s.vertices), s.id])), end = new Uint8Array(72);
+          for (const sticker of frames.at(-1)) if (mask.has(sticker.id))
+            end[slots.get(slotKey(sticker.vertices))] = sticker.color + 1;
           assert.equal(partialKey(end), partialKey(target));
         }
+      assert.deepEqual(groupCases(records, definition), records, "grouping is idempotent");
     }
   }
-  assert.ok(
-    alternateCount > 0,
-    "equal-depth alternatives must remain in the list",
-  );
+  assert.ok(alternateCount > 0, "distinct shortest alternatives are preserved");
 });
 
 test("regeneration preserves manually edited names and file order", () => {
@@ -213,8 +208,47 @@ test("shorter completions on another face or slot are rejected using only define
         ).byDepth[2].some((c) => c.solution === "F U'"),
       );
       assert.ok(
-        !records.some((c) => c.solution === "F U'" || c.solution === "F' U"),
+        !records.some((c) => c.solutions.some((s) => s === "F U'" || s === "F' U")),
       );
     }
   }
+});
+
+test("adjacent swaps commute on defined pieces only, without collapsing unrelated routes", () => {
+  const definition = definitions.arrow, target = partialTarget(definition.target);
+  const stateFor = (text) => applyPartial(target, inverseAlgorithm(parseScramble(text)));
+  const key = (text) => commutingKey(stateFor(text), parseScramble(text));
+  assert.equal(key("B' F' R'"), key("F' B' R'"));
+  // Find a swap which commutes on the pattern but not on all 72 stickers.
+  const full = Uint8Array.from({ length: 72 }, (_, i) => i + 1);
+  let found = false;
+  for (let a = 0; a < 16; a++) for (let b = a + 1; b < 16; b++) {
+    const path = [a, b], swapped = [b, a];
+    if (partialKey(applyPartial(target, path)) === partialKey(applyPartial(target, swapped)) &&
+        partialKey(applyPartial(full, path)) !== partialKey(applyPartial(full, swapped))) {
+      assert.equal(commutingKey(target, path), commutingKey(target, swapped));
+      found = true;
+    }
+  }
+  assert.ok(found, "partial-piece commutation differs from full-puzzle commutation");
+  assert.notEqual(commutingKey(target, parseScramble("R U")),
+    commutingKey(target, parseScramble("U R")));
+  const records = ["B' F' R'", "F' B' R'"].map((solution, i) => ({ id: String(i), name: "", solution }));
+  assert.equal(groupCases(records, definition).length, 1);
+  assert.deepEqual(groupCases(records, definition)[0].solutions, ["B' F' R'"]);
+});
+
+test("grouping preserves distinct routes, case order, names, and derived mirror alternatives", () => {
+  const definition = definitions.arrow;
+  const records = [
+    { id: "keep-first", name: "Recognizable", solution: "R BR' R'" },
+    { id: "other-pattern", name: "", solution: "R'" },
+    { id: "alternate", name: "", solution: "U' B U" },
+    { id: "mirror-alternate", name: "", solution: "U B' U'" },
+  ];
+  const grouped = groupCases(records, definition);
+  assert.deepEqual(grouped, [
+    { id: "keep-first", name: "Recognizable", solutions: ["R BR' R'", "U' B U"] },
+    { id: "other-pattern", name: "", solutions: ["R'"] },
+  ]);
 });

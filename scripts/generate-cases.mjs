@@ -10,6 +10,7 @@ import {
   inverseAlgorithm,
   algorithmText,
 } from "../src/model/cases.js";
+import { parseScramble } from "../src/model/fto.js";
 const root = new URL("../public/cases/", import.meta.url);
 export function shorterDistances(target, maxDepth = 3, goals = [target]) {
   const seen = new Map();
@@ -83,6 +84,62 @@ export function generateCases(definition, maxDepth = 4) {
   }
   return { byDepth, shorter };
 }
+// Two solutions are equivalent only when connected by adjacent swaps that
+// leave the defined partial state unchanged at the point of each swap.
+export function commutingKey(state, algorithm) {
+  const encode = (path) => path.map((move) => move.toString(16)).join("");
+  const seen = new Set([encode(algorithm)]), queue = [algorithm];
+  for (let n = 0; n < queue.length; n++) {
+    const path = queue[n];
+    let prefix = state;
+    for (let i = 0; i + 1 < path.length; i++) {
+      const a = path[i], b = path[i + 1];
+      if (a !== b && partialKey(stepPartial(stepPartial(prefix, a), b)) ===
+          partialKey(stepPartial(stepPartial(prefix, b), a))) {
+        const swapped = [...path];
+        [swapped[i], swapped[i + 1]] = [b, a];
+        const key = encode(swapped);
+        if (!seen.has(key)) { seen.add(key); queue.push(swapped); }
+      }
+      prefix = stepPartial(prefix, a);
+    }
+  }
+  return [...seen].sort()[0];
+}
+
+export function groupCases(records, definition) {
+  const target = partialTarget(definition.target), lookup = new Map(), groups = [];
+  for (const record of records) {
+    for (const text of record.solutions ?? [record.solution]) {
+      let algorithm = parseScramble(text);
+      const state = applyPartial(target, inverseAlgorithm(algorithm)), key = partialKey(state);
+      let match = lookup.get(key);
+      if (!match) {
+        const group = { id: record.id, name: record.name, solutions: [], state, keys: new Set() };
+        groups.push(group);
+        match = { group, reflected: false };
+        lookup.set(key, match);
+        if (definition.mirrors) {
+          const mirror = mirrorAlgorithm(algorithm),
+            mirrorKey = partialKey(applyPartial(target, inverseAlgorithm(mirror)));
+          if (mirrorKey !== key) lookup.set(mirrorKey, { group, reflected: true });
+        }
+      }
+      const { group, reflected } = match;
+      if (!group.name && record.name) group.name = record.name;
+      if (reflected) algorithm = mirrorAlgorithm(algorithm);
+      if (partialKey(applyPartial(target, inverseAlgorithm(algorithm))) !== partialKey(group.state))
+        throw new Error("Mirrored alternative does not match its case");
+      const equivalence = commutingKey(group.state, algorithm);
+      if (!group.keys.has(equivalence)) {
+        group.keys.add(equivalence);
+        group.solutions.push(algorithmText(algorithm));
+      }
+    }
+  }
+  return groups.map(({ state, keys, ...record }) => record);
+}
+
 export function preserveCaseEdits(previous, generated) {
   const existing = new Map(
     previous.map((c, i) => [c.id, { name: c.name, index: i }]),
@@ -99,7 +156,7 @@ export function preserveCaseEdits(previous, generated) {
 async function main() {
   const definitions = caseDefinitions(),
     manifest = {
-      version: 1,
+      version: 2,
       pageSize: 40,
       goal: "fixed pictured seed; reject shorter formations on any face/slot using only defined pieces",
       modes: {},
@@ -116,7 +173,7 @@ async function main() {
       } catch (e) {
         if (e.code !== "ENOENT") throw e;
       }
-      const records = preserveCaseEdits(previous, byDepth[depth]);
+      const records = groupCases(preserveCaseEdits(previous, byDepth[depth]), definition);
       await writeFile(
         url,
         "[\n" +

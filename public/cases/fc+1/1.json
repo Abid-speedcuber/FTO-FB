@@ -1,6 +1,6 @@
 [
-  {"id":"1-2","name":"","solution":"R'"},
-  {"id":"1-3","name":"","solution":"R"},
-  {"id":"1-e","name":"","solution":"D'"},
-  {"id":"1-0","name":"","solution":"U'"}
+  {"id":"1-2","name":"","solutions":["R'"]},
+  {"id":"1-3","name":"","solutions":["R"]},
+  {"id":"1-e","name":"","solutions":["D'"]},
+  {"id":"1-0","name":"","solutions":["U'"]}
 ]

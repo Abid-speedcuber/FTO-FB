@@ -4,8 +4,7 @@ import {
   solvedState,
   applyMove,
   moves,
-  solutionMask,
-  stickerPositions,
+  candidateMask,
   FACES,
 } from "./model/fto.js";
 export default function Viewer({
@@ -60,10 +59,7 @@ export default function Viewer({
       state = applyMove(state, moves[m]);
       frames.current.push(state);
     }
-    mask.current = solutionMask(
-      stickerPositions([...scramble, ...(solution?.moves ?? [])]),
-      solution?.target,
-    );
+    mask.current = solution ? candidateMask(solution.color) : new Set();
     index.current = 0;
     setStep(0);
     viewer.current?.setPuzzle(3, frames.current[0], mask.current);

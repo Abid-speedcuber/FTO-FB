@@ -3,12 +3,14 @@ import { OUTLINE_COLOR } from "./viewer-colors.js";
 import { FACES, solvedState } from "./puzzle.js";
 import { ViewControls } from "./view-controls.js";
 import { PuzzleMeshes } from "./puzzle-meshes.js";
+import { fitCameraToMeshes } from "./camera-framing.js";
 import { InspectionProjection } from "./inspection-projection.js";
 import { HOME_POSITION, defaultCifRotation } from "./orientation.js";
 
 // A self-contained viewer for checkpoint editing and recorded solves.
 export class PuzzleViewer {
-  constructor(host, { onSelect = null, showBackStickers = true } = {}) {
+  constructor(host, { onSelect = null, showBackStickers = true, fitToView = false } = {}) {
+    this.fitToView = fitToView;
     this.host = host;
     this.onSelect = onSelect;
     this.size = 3;
@@ -180,6 +182,13 @@ export class PuzzleViewer {
         selection: this.selection,
         animation: this.animating ? this.geometry : null,
       });
+      if (this.fitToView) {
+        this.scene.updateMatrixWorld(true);
+        fitCameraToMeshes(this.camera, [
+          ...this.geometry.pool.filter((mesh) => mesh.parent?.visible),
+          ...(this.projection.root.visible ? this.projection.activeMeshes ?? [] : []),
+        ]);
+      }
       this.renderer.render(this.scene, this.camera);
     }
   }

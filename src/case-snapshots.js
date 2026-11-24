@@ -36,9 +36,9 @@ export class CaseSnapshots {
         this.host = document.createElement("div");
         this.host.setAttribute("aria-hidden", "true");
         this.host.style.cssText =
-          "position:fixed;left:-10000px;top:0;width:320px;height:240px;pointer-events:none";
+          "position:fixed;left:-10000px;top:0;width:480px;height:360px;pointer-events:none";
         document.body.append(this.host);
-        this.viewer = new PuzzleViewer(this.host);
+        this.viewer = new PuzzleViewer(this.host, { fitToView: true });
         this.viewer.renderer.setPixelRatio(1);
         this.viewer.resize();
         this.home = { ...this.viewer.view(), radius: CASE_CAMERA_RADIUS };

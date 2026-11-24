@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Viewer from "./Viewer.jsx";
 import CaseList from "./CaseList.jsx";
+import Settings from "./Settings.jsx";
 import { FACES, names, moves, parseScramble } from "./model/fto.js";
 import "./style.css";
 
@@ -130,6 +131,7 @@ function App() {
             <option value="solver">Solver</option>
             <option value="cases">Case list</option>
           </select>
+          <Settings />
         </div>
       </header>
       <main hidden={view !== "solver"}>

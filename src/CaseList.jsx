@@ -13,12 +13,13 @@ import {
 } from "./model/cases.js";
 import { CaseSnapshots, CASE_CAMERA_RADIUS } from "./case-snapshots.js";
 
-function CasePlayer({ target, solution, playSignal, onPlaying, visible }) {
+function CasePlayer({ target, solution, playSignal, action, onPlaying, onStep, visible }) {
   const host = useRef(),
     viewer = useRef(),
     raf = useRef(),
     index = useRef(0),
-    playing = useRef(false);
+    playing = useRef(false),
+    inTurn = useRef(false);
   const parts = useMemo(() => caseFrames(target, solution), [target, solution]);
   function pause() {
     cancelAnimationFrame(raf.current);
@@ -28,7 +29,10 @@ function CasePlayer({ target, solution, playSignal, onPlaying, visible }) {
   function play() {
     if (!viewer.current || !solution.length) return;
     pause();
-    if (index.current >= solution.length) index.current = 0;
+    if (index.current >= solution.length) {
+      index.current = 0;
+      onStep(0);
+    }
     playing.current = true;
     onPlaying(true);
     let start;
@@ -37,11 +41,17 @@ function CasePlayer({ target, solution, playSignal, onPlaying, visible }) {
       if (start === undefined) start = time;
       const p = Math.max(0, Math.min(1, (time - start) / 450)),
         i = index.current;
+      if (p > 0 && !inTurn.current) {
+        inTurn.current = true;
+        onStep(index.current, true);
+      }
       viewer.current.setPuzzle(3, parts.frames[i], parts.mask, [
         { move: moves[solution[i]], progress: p },
       ]);
       if (p === 1) {
         index.current++;
+        inTurn.current = false;
+        onStep(index.current);
         viewer.current.setPuzzle(3, parts.frames[index.current], parts.mask);
         if (index.current === solution.length) {
           pause();
@@ -54,8 +64,11 @@ function CasePlayer({ target, solution, playSignal, onPlaying, visible }) {
     raf.current = requestAnimationFrame(tick);
   }
   useEffect(() => {
+    index.current = 0;
+    inTurn.current = false;
+    onStep(0);
     try {
-      viewer.current = new PuzzleViewer(host.current);
+      viewer.current = new PuzzleViewer(host.current, { fitToView: true });
       viewer.current.resize();
       viewer.current.setFrame(3, parts.frames[0], parts.mask, [], {
         ...viewer.current.view(),
@@ -71,7 +84,15 @@ function CasePlayer({ target, solution, playSignal, onPlaying, visible }) {
     };
   }, [parts]);
   useEffect(() => {
-    if (playSignal) {
+    if (!playSignal) return;
+    if (action === "previous" || action === "next") {
+      pause();
+      index.current = Math.max(0, Math.min(solution.length,
+        index.current + (action === "next" ? 1 : inTurn.current ? 0 : -1)));
+      inTurn.current = false;
+      viewer.current?.setPuzzle(3, parts.frames[index.current], parts.mask);
+      onStep(index.current);
+    } else {
       if (playing.current) pause();
       else play();
     }
@@ -97,11 +118,15 @@ function CaseCard({
     [near, setNear] = useState(false),
     [image, setImage] = useState(""),
     [error, setError] = useState(""),
-    [playing, setPlaying] = useState(false);
-  const solution = useMemo(() => {
-    const algorithm = parseScramble(entry.solution);
+    [playing, setPlaying] = useState(false),
+    [step, setStep] = useState(0),
+    [turning, setTurning] = useState(false),
+    [selectedSolution, setSelectedSolution] = useState(0);
+  const solutions = useMemo(() => entry.solutions.map((text) => {
+    const algorithm = parseScramble(text);
     return mirrored ? mirrorAlgorithm(algorithm) : algorithm;
-  }, [entry.solution, mirrored]);
+  }), [entry.solutions, mirrored]);
+  const solution = solutions[selectedSolution];
   const key = `${mode}:${entry.id}:${mirrored ? "mirror" : "base"}`;
   const snapshotKey = useMemo(
     () =>
@@ -151,14 +176,40 @@ function CaseCard({
           {mirrored && <span>Mirror</span>}
         </div>
         {entry.name && <h2>{entry.name}</h2>}
-        <div className="case-algorithm">{algorithmText(solution)}</div>
-        <button
-          type="button"
-          className="case-play"
-          onClick={() => activate(key, true)}
-        >
-          {focused && playing ? "Pause" : "Play"}
-        </button>
+        <div className="case-solutions">
+          {solutions.length === 1 ? (
+            <div className="case-algorithm">{algorithmText(solution)}</div>
+          ) : solutions.map((algorithm, i) => (
+            <button type="button" key={i} className="case-alternative case-algorithm"
+              aria-pressed={selectedSolution === i}
+              aria-label={`Solution ${i + 1}: ${algorithmText(algorithm)}`}
+              onClick={() => { setSelectedSolution(i); activate(key, false); }}>
+              {algorithmText(algorithm)}
+            </button>
+          ))}
+        </div>
+        <div className="case-transport" role="group" aria-label="Solution playback">
+          <button type="button" aria-label="Previous move" title="Previous move"
+            disabled={!focused || (step === 0 && !turning)}
+            onClick={() => activate(key, "previous")}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5v10m9-10-6 5 6 5Z" /></svg>
+          </button>
+          <button type="button" className="case-play"
+            aria-label={focused && playing ? "Pause" : "Play"}
+            title={focused && playing ? "Pause" : "Play"}
+            onClick={() => activate(key, true)}>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              {focused && playing
+                ? <path d="M7 5v10m6-10v10" />
+                : <path d="m7 4 9 6-9 6Z" />}
+            </svg>
+          </button>
+          <button type="button" aria-label="Next move" title="Next move"
+            disabled={focused && step === solution.length}
+            onClick={() => activate(key, "next")}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 5v10M6 5l6 5-6 5Z" /></svg>
+          </button>
+        </div>
       </div>
       <div
         className="case-stage"
@@ -173,7 +224,9 @@ function CaseCard({
             target={target}
             solution={solution}
             playSignal={active.playSignal}
+            action={active.action}
             onPlaying={setPlaying}
+            onStep={(next, partial = false) => { setStep(next); setTurning(partial); }}
             visible={visible}
           />
         ) : image ? (
@@ -234,8 +287,9 @@ export default function CaseList({ visible }) {
             (c) =>
               typeof c.id !== "string" ||
               typeof c.name !== "string" ||
-              typeof c.solution !== "string" ||
-              parseScramble(c.solution).length !== depth,
+              !Array.isArray(c.solutions) || !c.solutions.length ||
+              c.solutions.some((solution) => typeof solution !== "string" ||
+                parseScramble(solution).length !== depth),
           )
         )
           throw new Error("Invalid case file");
@@ -253,7 +307,7 @@ export default function CaseList({ visible }) {
   const activate = (key, play) => {
     const signal = play ? ++playCounter.current : 0;
     setActive((old) =>
-      old.key === key && !play ? old : { key, playSignal: signal },
+      old.key === key && !play ? old : { key, playSignal: signal, action: play === true ? "play" : play },
     );
   };
   const totalPages = Math.max(1, Math.ceil(cases.length / 40)),
