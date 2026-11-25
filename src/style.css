@@ -911,3 +911,70 @@ select:disabled {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+.trainer-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.trainer-heading h2 { margin: 0; font-size: 22px; }
+.trainer-heading label { display: flex; align-items: center; gap: 12px; }
+.trainer-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 24px; align-items: start; }
+.trainer-puzzle, .trainer-sidebar { min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+.trainer-stage { height: clamp(300px, 49vh, 560px); width: 100%; touch-action: none; }
+.trainer-stage canvas { display: block; }
+.trainer-status { min-height: 28px; margin: 12px 0; color: var(--accent-text); }
+.trainer-attempt { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 12px 0; border-top: 1px solid var(--border); }
+.trainer-attempt span { flex-shrink: 0; color: var(--muted); }
+.trainer-attempt code { overflow-wrap: anywhere; }
+.trainer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
+.trainer-actions .solve { margin-left: auto; }
+.trainer-sidebar fieldset { display: grid; gap: 14px; border: 0; padding: 0; margin: 0 0 22px; }
+.trainer-sidebar legend { font-weight: 600; margin-bottom: 18px; }
+.trainer-sidebar label { display: flex; align-items: center; gap: 9px; }
+.trainer-sidebar p, .trainer-settings p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.trainer-sidebar details { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px; }
+.trainer-sidebar summary { cursor: pointer; }
+.trainer-sidebar select { width: 100%; }
+.trainer-bindings { display: grid; grid-template-columns: 1fr 1fr; font-size: 12px; gap: 6px; }
+.trainer-bindings dt { font-family: monospace; }
+.trainer-bindings dd { margin: 0; color: var(--secondary); }
+.trainer-solution { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px; margin-bottom: 16px; background: var(--accent-wash); border-radius: 6px; }
+.trainer-solution code { overflow-wrap: anywhere; }
+.trainer-solution p { width: 100%; margin: 0; font-size: 12px; color: var(--muted); }
+.trainer-settings { margin-top: 24px; border-top: 1px solid var(--border); }
+.trainer-settings h3 { font-size: 15px; }
+.trainer-settings a { color: var(--accent); }
+@media (max-width: 760px) {
+  .trainer-layout { grid-template-columns: minmax(0, 1fr); }
+  .trainer-sidebar { grid-row: 1; }
+  .trainer-sidebar fieldset { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 16px; }
+  .trainer-sidebar legend { margin-bottom: 12px; }
+  .trainer-heading select { max-width: 100%; }
+  .trainer-heading label { min-width: 0; width: 100%; }
+  .trainer-stage { height: 340px; }
+  .trainer-actions .solve { margin-left: 0; }
+}
+
+.trainer-sidebar .trainer-colors { display: block; margin-top: 24px; }
+.trainer-sidebar .trainer-colors .colors { display: grid; grid-template-columns: repeat(4, 32px); gap: 14px; height: auto; padding: 4px; }
+.trainer-sidebar .trainer-colors .swatch { display: grid; place-items: center; width: 32px; height: 32px; }
+.trainer-keyboard-toggle { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); line-height: 1.4; }
+.trainer-keyboard-toggle input { margin: 0; flex-shrink: 0; }
+.trainer-keyboard-popup { position: fixed; z-index: 50; display: flex; flex-direction: column; min-width: 0; padding: 8px; background: var(--panel); border: 1px solid var(--border-hover); border-radius: 9px; box-shadow: 0 12px 40px #0006; container-type: inline-size; }
+.trainer-keyboard-title { display: flex; align-items: center; gap: 8px; height: 2.8cqw; flex-shrink: 0; margin-bottom: 0.7cqw; cursor: grab; touch-action: none; user-select: none; }
+.trainer-keyboard-title select { width: auto; max-width: 30%; padding: 0 3px; border-color: transparent; background: transparent; appearance: none; font-size: clamp(8px, 1.6cqw, 12px); }
+.trainer-keyboard-title button { margin-left: auto; padding: 0 5px; border: 0; background: transparent; font-size: clamp(9px, 2.4cqw, 18px); line-height: 1; }
+.trainer-keyboard-keys { position: relative; min-height: 0; flex: 1; }
+.trainer-keyboard-keys button { position: absolute; display: grid; place-items: center; min-width: 0; padding: 1px; overflow: hidden; touch-action: none; user-select: none; border-radius: 4px; font-size: clamp(6px, 1.8cqw, 15px); font-weight: 600; line-height: 1.05; }
+.trainer-keyboard-keys button span { white-space: pre-line; overflow-wrap: anywhere; }
+.trainer-keyboard-keys button.pressed { background: var(--accent-wash); border-color: var(--accent); }
+.trainer-keyboard-keys .iso-enter { clip-path: polygon(22% 0, 100% 0, 100% 100%, 0 100%, 0 50%, 22% 50%); }
+.trainer-keyboard-resize { position: absolute; right: 0; bottom: 0; width: 26px; height: 26px; cursor: nwse-resize; touch-action: none; }
+.trainer-keyboard-resize::after { content: ''; position: absolute; right: 6px; bottom: 6px; width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); }
+.trainer-case-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.trainer-case-navigation .solve { margin-left: 0; }
+.trainer-solution-moves { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; }
+.trainer-solution-moves button { font-family: ui-monospace, monospace; }
+.trainer-solution-moves .played { color: var(--accent-text); border-color: var(--accent-border); background: var(--accent-wash); }
+.trainer-solution-moves .next { border-color: var(--accent); }
+.trainer-solution-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.trainer-solution-controls span { font-size: 13px; color: var(--muted); }
+.trainer-attempt[hidden] { display: none; }
+@media (max-width: 760px) { .trainer-case-navigation { width: 100%; margin-left: 0; justify-content: space-between; } }

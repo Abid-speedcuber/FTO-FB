@@ -8,6 +8,7 @@ import CaseList from "./CaseList.jsx";
 import SolverFilters from "./SolverFilters.jsx";
 import { filteredSolutions, mergeSolutions, categoryDepths, completeSolutionTargets } from "./model/goal-filters.js";
 import Settings from "./Settings.jsx";
+import Trainer from "./Trainer.jsx";
 import { SOLVER_SESSION_KEY, SOLVER_MODES, readSession, packSolverSession, unpackSolverSession } from "./session.js";
 import { useSession } from "./use-session.js";
 import { FACES, names, parseScramble } from "./model/fto.js";
@@ -176,6 +177,7 @@ function App() {
           >
             <option value="solver">Solver</option>
             <option value="cases">Case list</option>
+            <option value="trainer">Trainer</option>
           </select>
           <Settings />
         </div>
@@ -387,6 +389,7 @@ function App() {
         </section>
       </main>
       {casesOpened && <CaseList visible={view === "cases"} />}
+      {view === "trainer" && <Trainer />}
     </>
   );
 }

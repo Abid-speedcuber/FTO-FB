@@ -82,7 +82,7 @@ export function unpackSolverSession(saved) {
   const interrupted = saved.status === "preparing" || saved.status === "searching";
   return {
     ...saved, solutions, ...(memory ? { memory } : {}),
-    view: saved.view === "cases" ? "cases" : "solver",
+    view: ["cases", "trainer"].includes(saved.view) ? saved.view : "solver",
     selected: Number.isInteger(saved.selected) && saved.selected >= 0 && saved.selected < solutions.length ? saved.selected : -1,
     page: Math.max(1, Math.min(Number.isInteger(saved.page) ? saved.page : 1, Math.ceil(solutions.length / 60) || 1)),
     status: interrupted ? "stopped" : ["done", "stopped", "error"].includes(saved.status) ? saved.status : "idle",

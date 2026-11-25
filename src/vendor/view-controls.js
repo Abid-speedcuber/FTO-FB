@@ -159,6 +159,7 @@ export class ViewControls extends THREE.EventDispatcher {
     if (
       this.mode === "legacy" &&
       p &&
+      !p.blocked &&
       !p.moved &&
       Math.hypot(e.clientX - p.startX, e.clientY - p.startY) <= 5 &&
       p.button !== 1

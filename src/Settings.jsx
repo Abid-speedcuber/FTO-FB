@@ -45,6 +45,10 @@ export default function Settings() {
             <option value="dark">Dark mode</option>
           </select>
         </label>
+        <div className="trainer-settings">
+          <h3>Trainer keybindings</h3>
+          <p>Edit Trainer’s 3×3 keybindings in <a href="/virtual/" target="_blank" rel="noreferrer">FTO-simulator settings</a>.</p>
+        </div>
       </dialog>
     </>
   );

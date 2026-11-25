@@ -92,7 +92,7 @@ export class PuzzleViewer {
           }
         }
       }
-      if (picked !== null) this.onSelect(picked);
+      if (picked !== null) this.onSelect(picked, event);
     });
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
